@@ -774,12 +774,21 @@ export default function App() {
   });
   const days=Object.keys(grouped).sort((a,b)=>new Date(b)-new Date(a));
   const getFilteredDays=()=>days.filter(day=>{
+    // day is in Indian locale format e.g. "11 Mar 2026"
     const d=new Date(day);
-    if(reportFrom&&d<new Date(reportFrom))return false;
-    if(reportTo&&d>new Date(reportTo+"T23:59:59"))return false;
+    if(reportFrom){
+      const [fy,fm,fd]=reportFrom.split("-").map(Number);
+      const from=new Date(fy,fm-1,fd);
+      if(d<from)return false;
+    }
+    if(reportTo){
+      const [ty,tm,td]=reportTo.split("-").map(Number);
+      const to=new Date(ty,tm-1,td,23,59,59);
+      if(d>to)return false;
+    }
     return true;
   });
-  const payAmt=(t,mode)=>t.void||t.cancelled?0:(t.payments?t.payments.find(p=>p.mode===mode)?.amount||0:(t.paymentMode===mode?t.total:0));
+  const payAmt=(t,mode)=>t.void||t.cancelled?0:Number(t.payments?t.payments.find(p=>p.mode===mode)?.amount||0:(t.paymentMode===mode?t.total:0))||0;
   const dayTotals=txns=>({
     gross:txns.filter(t=>!t.void&&!t.cancelled).reduce((s,t)=>s+t.subtotal,0),
     discount:txns.filter(t=>!t.void&&!t.cancelled).reduce((s,t)=>s+(t.discount||0),0),
@@ -788,10 +797,10 @@ export default function App() {
     net:txns.filter(t=>!t.void&&!t.cancelled).reduce((s,t)=>s+t.total,0),
     count:txns.filter(t=>!t.void&&!t.cancelled).length,
     voidCount:txns.filter(t=>t.void||t.cancelled).length,
-    cash:txns.reduce((s,t)=>s+payAmt(t,"Cash"),0),
-    upi:txns.reduce((s,t)=>s+payAmt(t,"UPI"),0),
-    card:txns.reduce((s,t)=>s+payAmt(t,"Card"),0),
-    credit:txns.reduce((s,t)=>s+payAmt(t,"Credit"),0),
+    cash:txns.reduce((s,t)=>s+(Number(payAmt(t,"Cash"))||0),0),
+    upi:txns.reduce((s,t)=>s+(Number(payAmt(t,"UPI"))||0),0),
+    card:txns.reduce((s,t)=>s+(Number(payAmt(t,"Card"))||0),0),
+    credit:txns.reduce((s,t)=>s+(Number(payAmt(t,"Credit"))||0),0),
   });
   const filteredTxns=getFilteredDays().flatMap(d=>grouped[d]);
   const rangeTotals=dayTotals(filteredTxns);
