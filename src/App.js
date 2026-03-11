@@ -666,10 +666,19 @@ export default function App() {
   const addTransaction=useCallback(async txn=>{setTransactions(p=>[txn,...p]);setSyncStatus("syncing");await sbInsert("transactions",shopCode,txn);setSyncStatus("ok");},[shopCode]);
   const updateTransaction=useCallback(async txn=>{setTransactions(p=>p.map(t=>t.id===txn.id?txn:t));setSyncStatus("syncing");await sbUpdate("transactions",shopCode,txn.id,txn);setSyncStatus("ok");},[shopCode]);
 
-  const getGstRate=(name,taxableVal)=>{
+  const getGstRate=(name,itemTaxableAmt)=>{
     const prod=products.find(p=>p.name.toLowerCase()===name.toLowerCase());
     if(prod&&prod.gstOverride!==null&&prod.gstOverride!==undefined)return prod.gstOverride/100;
-    return taxableVal>=settings.gstThreshold?settings.gstHigh/100:settings.gstLow/100;
+    // Threshold check on individual item's taxable amount
+    return Number(itemTaxableAmt)>=settings.gstThreshold?settings.gstHigh/100:settings.gstLow/100;
+  };
+
+  // Compute per-item taxable after proportional discount
+  const getItemTaxable=(price, qty, grandSub, discountAmt)=>{
+    const itemSub = price * qty;
+    if(grandSub===0)return itemSub;
+    const itemDiscount = (itemSub/grandSub)*discountAmt;
+    return itemSub - itemDiscount;
   };
 
   const grandSubtotal=cart.reduce((s,i)=>(parseFloat(i.price)||0)*(parseFloat(i.qty)||0)+s,0);
@@ -679,7 +688,8 @@ export default function App() {
   const tempTaxable=Math.max(0,grandSubtotal-manualDiscount);
   const cartWithTax=cart.map(item=>{
     const price=parseFloat(item.price)||0,qty=parseFloat(item.qty)||0,subtotal=price*qty;
-    const rate=getGstRate(item.name,tempTaxable);
+    const itemTaxable=getItemTaxable(price,qty,grandSubtotal,manualDiscount);
+    const rate=getGstRate(item.name,itemTaxable);
     return{...item,price,qty,subtotal,gstRate:rate,total:subtotal*(1+rate)};
   });
   const blendedRate=grandSubtotal>0?cartWithTax.reduce((s,i)=>s+(i.subtotal/grandSubtotal)*i.gstRate,0):0;
