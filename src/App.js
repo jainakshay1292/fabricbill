@@ -688,32 +688,18 @@ export default function App() {
   const tempTaxable=Math.max(0,grandSubtotal-manualDiscount);
   const cartWithTax=cart.map(item=>{
     const price=parseFloat(item.price)||0,qty=parseFloat(item.qty)||0,subtotal=price*qty;
+    // Step 1: apportion discount proportionally by gross value
+    const effectiveDiscount=useCollected?collectedDiscount:manualDiscount;
+    const itemDiscount=grandSubtotal>0?(subtotal/grandSubtotal)*effectiveDiscount:0;
+    // Step 2: item taxable after discount
+    const itemTaxable=subtotal-itemDiscount;
+    // Step 3: check threshold on post-discount taxable value
+    const prod=products.find(p=>p.name.toLowerCase()===item.name.toLowerCase());
     let rate;
-    if(useCollected){
-      // Step 1: item's proportional share of collected amount (includes GST)
-      const itemCollectedShare = grandSubtotal>0 ? (subtotal/grandSubtotal)*collected : collected;
-      // Step 2: iterate to find correct rate — try low rate first, check taxable against threshold
-      const lowRate = settings.gstLow/100;
-      const highRate = settings.gstHigh/100;
-      const prod = products.find(p=>p.name.toLowerCase()===item.name.toLowerCase());
-      if(prod&&prod.gstOverride!==null&&prod.gstOverride!==undefined){
-        rate = prod.gstOverride/100;
-      } else {
-        // Back-calculate taxable using low rate, check if it crosses threshold
-        const taxableAtLow = itemCollectedShare / (1 + lowRate);
-        const taxableAtHigh = itemCollectedShare / (1 + highRate);
-        // If taxable at high rate is still above threshold, use high rate
-        // If taxable at low rate is below threshold, use low rate
-        // The correct rate is whichever is self-consistent
-        if(taxableAtHigh >= settings.gstThreshold){
-          rate = highRate; // above threshold even after back-calc at 18%
-        } else {
-          rate = lowRate;  // below threshold → use 5%
-        }
-      }
+    if(prod&&prod.gstOverride!==null&&prod.gstOverride!==undefined){
+      rate=prod.gstOverride/100;
     } else {
-      const itemTaxable = getItemTaxable(price,qty,grandSubtotal,manualDiscount);
-      rate = getGstRate(item.name, itemTaxable);
+      rate=itemTaxable>settings.gstThreshold?settings.gstHigh/100:settings.gstLow/100;
     }
     return{...item,price,qty,subtotal,gstRate:rate,total:subtotal*(1+rate)};
   });
