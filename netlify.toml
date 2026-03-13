@@ -1,0 +1,11 @@
+[build]
+  command = "npm run build"
+  publish = "dist"                # change to "build" if using Create React App
+
+[functions]
+  directory = "netlify/functions"
+
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/db"
+  status = 200
