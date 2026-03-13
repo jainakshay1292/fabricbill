@@ -182,3 +182,34 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: "Internal server error" });
   }
 }
+
+
+// ── ADD THIS CASE TO db.js (inside the try block) ────────────
+
+    // ── ACTION: get next voucher number ────────────────────
+    if (action === "nextVoucher") {
+      const fy = query;
+      const seqId = `${shopCode}::RV::${fy}`;
+      const r1 = await fetch(sb(`invoice_seq?id=eq.${encodeURIComponent(seqId)}`), { headers });
+      const existing = await r1.json();
+      let nextSeq;
+      if (existing && existing.length > 0) {
+        nextSeq = existing[0].seq + 1;
+        await fetch(sb(`invoice_seq?id=eq.${encodeURIComponent(seqId)}`), {
+          method: "PATCH",
+          headers: { ...headers, "Prefer": "return=representation" },
+          body: JSON.stringify({ seq: nextSeq }),
+        });
+      } else {
+        nextSeq = 1;
+        await fetch(sb("invoice_seq"), {
+          method: "POST",
+          headers: { ...headers, "Prefer": "resolution=merge-duplicates,return=representation" },
+          body: JSON.stringify({ id: seqId, seq: nextSeq }),
+        });
+      }
+      // Vercel format:
+      return res.status(200).json({ voucherNo: `RV-${fy}/${String(nextSeq).padStart(3, "0")}` });
+      // Netlify format:
+      // return { statusCode: 200, body: JSON.stringify({ voucherNo: `RV-${fy}/${String(nextSeq).padStart(3, "0")}` }) };
+    }
