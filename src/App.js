@@ -450,9 +450,9 @@ function CreditSettleModal({ customer, outstanding, settings, onConfirm, onCance
   const [mode, setMode] = useState("Cash");
   const f = n => fmt(n, settings.currency);
   const handleConfirm = () => {
-    const amt = parseFloat(amount);
-    if (!amt || amt <= 0) return alert("Enter a valid amount");
-    if (amt > outstanding) return alert("Amount cannot exceed outstanding " + f(outstanding));
+    const amt = parseFloat(String(amount).trim());
+    if (isNaN(amt) || amt <= 0) return alert("Enter a valid amount");
+    if (amt > outstanding + 0.01) return alert("Amount cannot exceed outstanding " + f(outstanding));
     onConfirm(amt, mode);
   };
   return (
