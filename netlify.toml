@@ -1,6 +1,7 @@
+
 [build]
   command = "npm run build"
-  publish = "dist"                # change to "build" if using Create React App
+  publish = "build"
 
 [functions]
   directory = "netlify/functions"
