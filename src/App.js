@@ -251,6 +251,28 @@ function InvoiceView({ txn, settings, onClose }) {
     win.document.close();
   };
 
+  const doSharePDF = async () => {
+    const el = document.getElementById("inv-print");
+    if (!window.html2canvas) await new Promise((res, rej) => { const s = document.createElement("script"); s.src = "https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"; s.onload = res; s.onerror = rej; document.head.appendChild(s); });
+    if (!window.jspdf) await new Promise((res, rej) => { const s = document.createElement("script"); s.src = "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"; s.onload = res; s.onerror = rej; document.head.appendChild(s); });
+    try {
+      const canvas = await window.html2canvas(el, { scale: 2, useCORS: true, backgroundColor: "#fff" });
+      const { jsPDF } = window.jspdf;
+      const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a5" });
+      const pdfW = pdf.internal.pageSize.getWidth();
+      pdf.addImage(canvas.toDataURL("image/jpeg", 0.95), "JPEG", 0, 0, pdfW, (canvas.height * pdfW) / canvas.width);
+      const blob = pdf.output("blob");
+      const file = new File([blob], "Invoice-" + txn.invoiceNo.replace("/", "-") + ".pdf", { type: "application/pdf" });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ title: "Invoice " + txn.invoiceNo, files: [file] });
+      } else {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a"); a.href = url; a.download = file.name; a.click();
+        URL.revokeObjectURL(url);
+      }
+    } catch { alert("Could not generate PDF. Try on mobile Chrome."); }
+  };
+
   const doWhatsApp = () => {
     let msg = `🧵 *${settings.shopName}*\n_${settings.shopTagline || ""}_\n${settings.shopAddress}\nGSTIN: ${settings.gstin}\n─────────────────────\n`;
     if (txn.void || txn.cancelled) msg += "❌ *VOID / CANCELLED INVOICE*\n─────────────────────\n";
@@ -368,8 +390,8 @@ function InvoiceView({ txn, settings, onClose }) {
             <div style={{ fontWeight: 900, fontSize: 20, color: "#dc2626" }}>{f(creditAmt)}</div>
           </div>
         )}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 6, marginTop: 14 }}>
-          {[["🖨️","Print","#16a34a",doPrint],["💬","WA","#25d366",doWhatsApp],["🖨️","Thermal","#2563eb",() => setShowBt(true)],["✖","Close","#1e3a5f",onClose]].map(([icon,label,bg,fn]) => (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 6, marginTop: 14 }}>
+          {[["🖨️","Print","#16a34a",doPrint],["💬","WA","#25d366",doWhatsApp],["📄","PDF","#128c7e",doSharePDF],["🖨️","Thermal","#2563eb",() => setShowBt(true)],["✖","Close","#1e3a5f",onClose]].map(([icon,label,bg,fn]) => (
             <button key={label} onClick={fn} style={{ padding: "11px 0", background: bg, color: "#fff", border: "none", borderRadius: 12, fontSize: 11, fontWeight: 800, cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
               <span style={{ fontSize: 16 }}>{icon}</span><span>{label}</span>
             </button>
@@ -1383,7 +1405,7 @@ export default function App() {
                 <div key={k} style={{ marginBottom: 12 }}>
                   <label style={lbl}>{l}</label>
                   <input type="password" maxLength={4} value={val} onChange={e => setter(e.target.value.replace(/\D/g,"").slice(0,4))}
-                    placeholder="Leave blank to keep current" style={{ ...inp, width: 140, letterSpacing: 6, fontSize: 18 }} inputMode="numeric" />
+                    placeholder="••••" style={{ ...inp, width: 140, letterSpacing: 8, fontSize: 20 }} inputMode="numeric" />
                 </div>
               ))}
             </div>
