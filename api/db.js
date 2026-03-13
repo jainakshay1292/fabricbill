@@ -175,18 +175,7 @@ export default async function handler(req, res) {
       return res.status(200).json({ allowed: true });
     }
 
-    return res.status(400).json({ error: "Unknown action" });
-
-  } catch (err) {
-    console.error("DB proxy error:", err);
-    return res.status(500).json({ error: "Internal server error" });
-  }
-}
-
-
-// ── ADD THIS CASE TO db.js (inside the try block) ────────────
-
-    // ── ACTION: get next voucher number ────────────────────
+    // ── nextVoucher ─────────────────────────────────────────
     if (action === "nextVoucher") {
       const fy = query;
       const seqId = `${shopCode}::RV::${fy}`;
@@ -208,8 +197,13 @@ export default async function handler(req, res) {
           body: JSON.stringify({ id: seqId, seq: nextSeq }),
         });
       }
-      // Vercel format:
       return res.status(200).json({ voucherNo: `RV-${fy}/${String(nextSeq).padStart(3, "0")}` });
-      // Netlify format:
-      // return { statusCode: 200, body: JSON.stringify({ voucherNo: `RV-${fy}/${String(nextSeq).padStart(3, "0")}` }) };
     }
+
+    return res.status(400).json({ error: "Unknown action" });
+
+  } catch (err) {
+    console.error("DB proxy error:", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+}
