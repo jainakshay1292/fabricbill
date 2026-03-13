@@ -75,7 +75,27 @@ export const registerShop = async (shopCode, settings) => {
 };
 
 // ── PIN hashing (client-side, for registration only) ──────────
+
+
 export const hashPin = async (pin) => {
   const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(pin));
   return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
+};
+
+
+
+// ── ADD THESE TO src/lib/api.js ───────────────────────────────
+
+export const getSettlements = (shopCode) =>
+  call({ action: "getAll", shopCode, table: "settlements" });
+
+export const insertSettlement = (shopCode, settlement) =>
+  call({ action: "insert", shopCode, table: "settlements", data: settlement });
+
+export const getNextVoucherNo = async (shopCode) => {
+  const d = new Date(), y = d.getFullYear(), m = d.getMonth();
+  const s = m >= 3 ? y : y - 1;
+  const fy = `${s}-${String(s + 1).slice(2)}`;
+  const { voucherNo } = await call({ action: "nextVoucher", shopCode, query: fy });
+  return voucherNo;
 };
