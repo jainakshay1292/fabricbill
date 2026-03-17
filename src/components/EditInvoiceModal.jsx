@@ -10,12 +10,29 @@ import { genId } from "../utils/misc";
 import { PAYMENT_MODES } from "../constants";
 import { inp, lbl } from "../styles";
 
-export function EditInvoiceModal({ txn, products, settings, onSave, onCancel, onVoidInvoice }) {
+export function EditInvoiceModal({ txn, products, settings, customers = [], onSave, onCancel, onVoidInvoice }) {
   const [items, setItems]       = useState(txn.items.map((i) => ({ ...i })));
   const [payments, setPayments] = useState(txn.payments || [{ mode: txn.paymentMode || "Cash", amount: txn.total || txn.net || 0 }]);
   const [discount, setDiscount] = useState(txn.discount || 0);
+
+  // ── Customer change state ─────────────────────
+  const [selectedCustomerId, setSelectedCustomerId] = useState(txn.customer?.id || "c1");
+  const [custSearch, setCustSearch]                 = useState("");
+  const [showCustSearch, setShowCustSearch]         = useState(false);
+
   const f = (n) => fmt(n, settings.currency);
 
+  // ── Customer search filter ────────────────────
+  const filteredCusts = custSearch.trim()
+    ? customers.filter((c) =>
+        c.name.toLowerCase().includes(custSearch.toLowerCase()) ||
+        (c.phone || "").includes(custSearch)
+      )
+    : customers;
+
+  const selectedCust = customers.find((c) => c.id === selectedCustomerId) || txn.customer;
+
+  // ── Payment helpers ───────────────────────────
   const usedModes         = payments.map((p) => p.mode);
   const availableModesFor = (cur) => PAYMENT_MODES.filter((m) => m === cur || !usedModes.includes(m));
 
@@ -35,10 +52,12 @@ export function EditInvoiceModal({ txn, products, settings, onSave, onCancel, on
   const totalPaid       = payments.reduce((s, p) => s + (parseFloat(p.amount) || 0), 0);
   const paymentMismatch = payments.length > 1 && Math.abs(totalPaid - netAmount) > 1 && totalPaid > 0;
 
+  // ── Item helpers ──────────────────────────────
   const updateItem = (uid, field, v) => setItems((p) => p.map((i) => i.uid === uid ? { ...i, [field]: v } : i));
   const removeItem = (uid) => setItems((p) => p.filter((i) => i.uid !== uid));
   const addItem    = () => setItems((p) => [...p, { uid: genId(), name: "", price: "", qty: 1 }]);
 
+  // ── Payment helpers ───────────────────────────
   const updatePayment = (idx, field, v) => setPayments((p) => p.map((pm, i) => i === idx ? { ...pm, [field]: v } : pm));
   const addPayment    = () => {
     const remaining = PAYMENT_MODES.filter((m) => !payments.map((p) => p.mode).includes(m));
@@ -47,6 +66,7 @@ export function EditInvoiceModal({ txn, products, settings, onSave, onCancel, on
   };
   const removePayment = (idx) => setPayments((p) => p.filter((_, i) => i !== idx));
 
+  // ── Save ──────────────────────────────────────
   const handleSave = () => {
     const validItems = items
       .filter((i) => i.name && parseFloat(i.price) !== 0 && parseFloat(i.qty) !== 0)
@@ -65,11 +85,20 @@ export function EditInvoiceModal({ txn, products, settings, onSave, onCancel, on
     if (finalPay.length > 1 && Math.abs(finalPay.reduce((s, p) => s + p.amount, 0) - netAmount) > 1) {
       alert("Payment total doesn't match net amount."); return;
     }
+
+    const cust = customers.find((c) => c.id === selectedCustomerId) || txn.customer;
+
     onSave({
-      ...txn, items: validItems, subtotal: grandSubtotal,
+      ...txn,
+      items: validItems,
+      subtotal: grandSubtotal,
       discount: Math.min(discount, grandSubtotal),
       taxable, gst, roundOff: 0, total: netAmount,
-      payments: finalPay, paymentMode: finalPay[0]?.mode || "Cash",
+      payments: finalPay,
+      paymentMode: finalPay[0]?.mode || "Cash",
+      customer:      cust,
+      customerName:  cust?.name  || txn.customerName,
+      customerPhone: cust?.phone || txn.customerPhone,
       editedAt: new Date().toISOString(),
     });
   };
@@ -78,9 +107,65 @@ export function EditInvoiceModal({ txn, products, settings, onSave, onCancel, on
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 200, display: "flex", alignItems: "flex-end" }}
       onClick={(e) => { if (e.target === e.currentTarget) onCancel(); }}>
       <div style={{ background: "#fff", borderRadius: "20px 20px 0 0", padding: 16, width: "100%", maxWidth: 480, margin: "0 auto", maxHeight: "92vh", overflowY: "auto" }}>
+
         <div style={{ fontWeight: 800, fontSize: 17, color: "#1e3a5f", marginBottom: 2 }}>✏️ Edit Invoice {txn.invoiceNo}</div>
         <div style={{ fontSize: 11, color: "#f59e0b", marginBottom: 14, fontWeight: 600 }}>⏰ Editable within 24 hours of creation</div>
 
+        {/* ── Customer selector ── */}
+        <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 10, padding: 12, marginBottom: 14 }}>
+          <div style={{ fontWeight: 700, fontSize: 13, color: "#1e3a5f", marginBottom: 8 }}>👤 Customer</div>
+
+          {/* Current customer display */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "#fff", border: "1px solid #d1d5db", borderRadius: 8, padding: "10px 12px" }}>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 14 }}>{selectedCust?.name || "Walk-in"}</div>
+              {selectedCust?.phone && <div style={{ fontSize: 12, color: "#9ca3af" }}>{selectedCust.phone}</div>}
+            </div>
+            <button
+              onClick={() => { setShowCustSearch((p) => !p); setCustSearch(""); }}
+              style={{ padding: "6px 12px", background: "#eff6ff", color: "#2563eb", border: "none", borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+              {showCustSearch ? "✕ Close" : "🔄 Change"}
+            </button>
+          </div>
+
+          {/* Search + list */}
+          {showCustSearch && (
+            <div style={{ marginTop: 10 }}>
+              <input
+                value={custSearch}
+                onChange={(e) => setCustSearch(e.target.value)}
+                placeholder="Search by name or phone..."
+                style={{ ...inp, fontSize: 13, marginBottom: 8 }}
+                autoFocus
+              />
+              <div style={{ maxHeight: 200, overflowY: "auto", border: "1px solid #e5e7eb", borderRadius: 8 }}>
+                {/* Walk-in option */}
+                <div
+                  onClick={() => { setSelectedCustomerId("c1"); setShowCustSearch(false); }}
+                  style={{ padding: "10px 12px", cursor: "pointer", background: selectedCustomerId === "c1" ? "#eff6ff" : "#fff", borderBottom: "1px solid #f3f4f6", fontWeight: selectedCustomerId === "c1" ? 700 : 500, fontSize: 13 }}>
+                  🚶 Walk-in Customer
+                </div>
+                {filteredCusts.filter((c) => c.id !== "c1").map((c) => (
+                  <div
+                    key={c.id}
+                    onClick={() => { setSelectedCustomerId(c.id); setShowCustSearch(false); setCustSearch(""); }}
+                    style={{ padding: "10px 12px", cursor: "pointer", background: selectedCustomerId === c.id ? "#eff6ff" : "#fff", borderBottom: "1px solid #f3f4f6", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: 13 }}>{c.name}</div>
+                      <div style={{ fontSize: 11, color: "#9ca3af" }}>{c.phone || "No phone"}</div>
+                    </div>
+                    {selectedCustomerId === c.id && <span style={{ color: "#2563eb", fontWeight: 800 }}>✓</span>}
+                  </div>
+                ))}
+                {filteredCusts.filter((c) => c.id !== "c1").length === 0 && custSearch && (
+                  <div style={{ padding: "12px", fontSize: 13, color: "#9ca3af", textAlign: "center" }}>No customers found</div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* ── Items ── */}
         {items.map((item) => (
           <div key={item.uid} style={{ background: "#f9fafb", borderRadius: 10, padding: 10, marginBottom: 8, border: "1px solid #e5e7eb" }}>
             <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>
@@ -116,6 +201,7 @@ export function EditInvoiceModal({ txn, products, settings, onSave, onCancel, on
             style={{ width: 90, textAlign: "right", border: "1px solid #d1d5db", borderRadius: 6, padding: "6px 8px", fontSize: 14 }} />
         </div>
 
+        {/* ── Totals ── */}
         <div style={{ background: "#eff6ff", borderRadius: 10, padding: "12px 14px", marginBottom: 12, fontSize: 13 }}>
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}><span style={{ color: "#6b7280" }}>Taxable</span><span style={{ fontWeight: 700 }}>{f(taxable)}</span></div>
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}><span style={{ color: "#6b7280" }}>GST</span><span style={{ fontWeight: 700 }}>{f(gst)}</span></div>
@@ -124,6 +210,7 @@ export function EditInvoiceModal({ txn, products, settings, onSave, onCancel, on
           </div>
         </div>
 
+        {/* ── Payment ── */}
         <div style={{ fontWeight: 700, fontSize: 13, color: "#1e3a5f", marginBottom: 8 }}>💳 Payment</div>
         {payments.map((pm, idx) => (
           <div key={idx} style={{ display: "flex", gap: 6, marginBottom: 8, alignItems: "center" }}>
@@ -153,6 +240,7 @@ export function EditInvoiceModal({ txn, products, settings, onSave, onCancel, on
           </div>
         )}
 
+        {/* ── Actions ── */}
         <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
           <button onClick={handleSave}
             style={{ flex: 2, padding: "13px 0", background: "#1e3a5f", color: "#fff", border: "none", borderRadius: 10, fontSize: 14, fontWeight: 800, cursor: "pointer" }}>
@@ -168,6 +256,7 @@ export function EditInvoiceModal({ txn, products, settings, onSave, onCancel, on
           style={{ width: "100%", marginTop: 8, padding: "11px 0", background: "#fee2e2", color: "#dc2626", border: "1px solid #fca5a5", borderRadius: 10, fontSize: 13, fontWeight: 800, cursor: "pointer" }}>
           🚫 Void Invoice
         </button>
+
       </div>
     </div>
   );
