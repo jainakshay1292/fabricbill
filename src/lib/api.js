@@ -99,3 +99,51 @@ export const getNextVoucherNo = async (shopCode) => {
   const { voucherNo } = await call({ action: "nextVoucher", shopCode, query: fy });
   return voucherNo;
 };
+
+
+/**
+ * Upload a PDF (base64) to Vercel Blob
+ * Returns a public URL
+ *
+ * @param {string} base64   - base64 encoded PDF string
+ * @param {string} filename - e.g. "Invoice-INV-2024-001.pdf"
+ * @returns {string} public URL
+ */
+export async function uploadPDF(base64, filename) {
+  const res = await fetch("/api/uploadPDF", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ base64, filename }),
+  });
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.error || "PDF upload failed");
+  }
+  const data = await res.json();
+  return data.url; // public Vercel Blob URL
+}
+
+/**
+ * Send WhatsApp message via AiSensy
+ *
+ * @param {string}   phone         - 10-digit mobile number
+ * @param {string}   templateName  - AiSensy campaign name (must match exactly)
+ * @param {string[]} variables     - Values for {{1}}, {{2}}...
+ * @param {string}   mediaUrl      - (optional) public PDF URL for FILE templates
+ * @param {string}   mediaFilename - (optional) filename shown in WhatsApp
+ */
+export async function sendWhatsApp(phone, templateName, variables, mediaUrl = "", mediaFilename = "") {
+  if (!phone || phone.length !== 10) {
+    throw new Error("Invalid phone number — must be 10 digits");
+  }
+  const res = await fetch("/api/sendWhatsApp", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ phone, templateName, variables, mediaUrl, mediaFilename }),
+  });
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.error || "WhatsApp send failed");
+  }
+  return res.json();
+}
