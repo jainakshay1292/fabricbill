@@ -1,15 +1,3 @@
-// ─────────────────────────────────────────────
-// App.js
-// Root component. Responsibilities:
-//   1. Screen routing (shop code → login → main)
-//   2. Wire hooks together
-//   3. Manage modal open/close state
-//   4. Render the nav bar + active tab
-//
-// No business logic lives here — it all lives
-// in hooks/ and is just called from here.
-// ─────────────────────────────────────────────
-
 import { useState } from "react";
 
 // Styles
@@ -32,12 +20,12 @@ import { HistoryTab }   from "./tabs/HistoryTab";
 import { ProductsTab }  from "./tabs/ProductsTab";
 import { SettingsTab }  from "./tabs/SettingsTab";
 
-// Modals / overlays
-import InvoiceView              from "./components/InvoiceView";
-import { EditInvoiceModal }     from "./components/EditInvoiceModal";
-import { CreditSettleModal }    from "./components/CreditSettleModal";
-import { ReceiptVoucher }       from "./components/ReceiptVoucher";
-import { CustomerLedger }       from "./components/CustomerLedger";
+// Modals — InvoiceView is default export, rest are named exports
+import InvoiceView           from "./components/InvoiceView";
+import { EditInvoiceModal }  from "./components/EditInvoiceModal";
+import { CreditSettleModal } from "./components/CreditSettleModal";
+import { ReceiptVoucher }    from "./components/ReceiptVoucher";
+import { CustomerLedger }    from "./components/CustomerLedger";
 
 // Inject global CSS once on load
 injectGlobalStyles();
@@ -103,16 +91,21 @@ export default function App() {
   const handleLogin = (r) => {
     setRole(r);
     setTab("billing");
-    try { localStorage.setItem("fabricbill_session", JSON.stringify({ role: r, expiry: Date.now() + 24 * 3600000 })); } catch {}
+    try {
+      localStorage.setItem("fabricbill_session", JSON.stringify({ role: r, expiry: Date.now() + 24 * 3600000 }));
+    } catch {}
   };
+
   const handleLogout = () => {
     setRole(null);
     try { localStorage.removeItem("fabricbill_session"); } catch {}
   };
+
   const handleEnterShop = (code) => {
     setShopCode(code);
     try { localStorage.setItem("fabricbill_shopcode", code); } catch {}
   };
+
   const handleChangeShop = () => {
     _handleChangeShop();
     setShopCode(null);
@@ -127,10 +120,13 @@ export default function App() {
     setEditTxn(null);
     setShowReceipt(txn);
   };
+
   const handleVoidInvoice = async (txn) => {
     const { updateTransaction } = await import("./lib/api");
     const voided = {
-      ...txn, void: true, voidedAt: new Date().toISOString(),
+      ...txn,
+      void: true,
+      voidedAt: new Date().toISOString(),
       total: 0, subtotal: 0, taxable: 0, gst: 0, discount: 0,
       payments: (txn.payments || []).map((p) => ({ ...p, amount: 0 })),
     };
@@ -147,7 +143,7 @@ export default function App() {
     setShowVoucher(voucher);
   };
 
-  // ── Nav tabs (staff can't see Products/Settings) ──
+  // ── Nav tabs (staff can't see Products / Settings) ──
   const navTabs = isAdmin
     ? [["billing","🧾","Bill"], ["customers","👤","Customers"], ["history","📋","History"], ["products","📦","Products"], ["settings","⚙️","Settings"]]
     : [["billing","🧾","Bill"], ["customers","👤","Customers"], ["history","📋","History"]];
@@ -155,6 +151,7 @@ export default function App() {
   // ─────────────────────────────────────────────
   // Screen guards (shown before main app)
   // ─────────────────────────────────────────────
+
   if (!shopCode)
     return <ShopCodeScreen onEnter={handleEnterShop} />;
 
@@ -168,10 +165,21 @@ export default function App() {
     );
 
   if (isNewShop)
-    return <RegisterScreen shopCode={shopCode} onRegistered={() => { setIsNewShop(false); appData.setReady?.(false); }} />;
+    return (
+      <RegisterScreen
+        shopCode={shopCode}
+        onRegistered={() => { setIsNewShop(false); }}
+      />
+    );
 
   if (!role)
-    return <LoginScreen onLogin={handleLogin} shopCode={shopCode} onChangeShop={handleChangeShop} />;
+    return (
+      <LoginScreen
+        onLogin={handleLogin}
+        shopCode={shopCode}
+        onChangeShop={handleChangeShop}
+      />
+    );
 
   // ─────────────────────────────────────────────
   // Main app shell
@@ -179,11 +187,13 @@ export default function App() {
   return (
     <div style={{ fontFamily: "'DM Sans',-apple-system,sans-serif", background: "#f0f2f5", minHeight: "100vh", maxWidth: 480, margin: "0 auto", paddingBottom: 80 }}>
 
-      {/* Header */}
+      {/* ── Header ── */}
       <div style={{ background: "#1e3a5f", color: "#fff", padding: "12px 16px", position: "sticky", top: 0, zIndex: 50, display: "flex", justifyContent: "space-between", alignItems: "center", boxShadow: "0 2px 8px rgba(0,0,0,0.15)" }}>
         <div>
           <div style={{ fontWeight: 800, fontSize: 17 }}>{settings.shopName}</div>
-          <div style={{ fontSize: 10, opacity: 0.6, marginTop: 1 }}>🏪 {shopCode} · {new Date().toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" })}</div>
+          <div style={{ fontSize: 10, opacity: 0.6, marginTop: 1 }}>
+            🏪 {shopCode} · {new Date().toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" })}
+          </div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
           {SYNC_BADGE[syncStatus] && (
@@ -194,15 +204,17 @@ export default function App() {
           <span style={{ background: isAdmin ? "#fbbf24" : "#34d399", color: "#1e3a5f", borderRadius: 20, padding: "3px 10px", fontSize: 11, fontWeight: 800 }}>
             {isAdmin ? "🔐 Admin" : "👤 Staff"}
           </span>
-          <button onClick={handleLogout}
+          <button
+            onClick={handleLogout}
             style={{ background: "rgba(255,255,255,0.15)", border: "none", borderRadius: 8, color: "#fff", padding: "5px 10px", fontSize: 11, cursor: "pointer", fontWeight: 700 }}>
             Logout
           </button>
         </div>
       </div>
 
-      {/* Active tab content */}
+      {/* ── Active tab content ── */}
       <div style={{ padding: "14px 12px" }}>
+
         {tab === "billing" && (
           <BillingTab
             {...billing}
@@ -212,20 +224,28 @@ export default function App() {
             onGoToCustomers={() => setTab("customers")}
           />
         )}
+
         {tab === "customers" && (
           <CustomersTab
-            customers={customers} setCustomers={setCustomers}
-            transactions={transactions} settlements={settlements}
+            customers={customers}
+            setCustomers={setCustomers}
+            transactions={transactions}
+            settlements={settlements}
             getCustomerOutstanding={getCustomerOutstanding}
-            settings={settings} shopCode={shopCode}
+            settings={settings}
+            shopCode={shopCode}
             onSettle={(c) => setSettleCustomer(c)}
             onViewLedger={(c) => setShowLedger(c)}
           />
         )}
+
         {tab === "history" && (
           <HistoryTab
-            transactions={transactions} settlements={settlements}
-            customers={customers} settings={settings} isAdmin={isAdmin}
+            transactions={transactions}
+            settlements={settlements}
+            customers={customers}
+            settings={settings}
+            isAdmin={isAdmin}
             getCustomerOutstanding={getCustomerOutstanding}
             onViewReceipt={(txn) => setShowReceipt(txn)}
             onEditTxn={(txn) => setEditTxn(txn)}
@@ -233,20 +253,29 @@ export default function App() {
             onViewVoucher={(v) => setShowVoucher(v)}
           />
         )}
+
         {tab === "products" && isAdmin && (
-          <ProductsTab products={products} setProducts={setProducts} settings={settings} shopCode={shopCode} />
+          <ProductsTab
+            products={products}
+            setProducts={setProducts}
+            settings={settings}
+            shopCode={shopCode}
+          />
         )}
+
         {tab === "settings" && isAdmin && (
           <SettingsTab
-            draftSettings={draftSettings} setDraftSettings={setDraftSettings}
+            draftSettings={draftSettings}
+            setDraftSettings={setDraftSettings}
             handleSaveSettings={handleSaveSettings}
             handleChangeShop={handleChangeShop}
             shopCode={shopCode}
           />
         )}
+
       </div>
 
-      {/* Bottom nav */}
+      {/* ── Bottom nav ── */}
       <div style={{ position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 480, background: "#fff", borderTop: "1px solid #e5e7eb", display: "flex", zIndex: 50, boxShadow: "0 -2px 8px rgba(0,0,0,0.06)" }}>
         {navTabs.map(([key, icon, label]) => (
           <button key={key} onClick={() => setTab(key)}
@@ -259,11 +288,17 @@ export default function App() {
 
       {/* ── Modals ── */}
       {showReceipt && (
-        <InvoiceView txn={showReceipt} settings={settings} onClose={() => setShowReceipt(null)} />
+        <InvoiceView
+          txn={showReceipt}
+          settings={settings}
+          onClose={() => setShowReceipt(null)}
+        />
       )}
       {editTxn && (
         <EditInvoiceModal
-          txn={editTxn} products={products} settings={settings}
+          txn={editTxn}
+          products={products}
+          settings={settings}
           onSave={handleEditSave}
           onCancel={() => setEditTxn(null)}
           onVoidInvoice={() => handleVoidInvoice(editTxn)}
@@ -279,17 +314,23 @@ export default function App() {
         />
       )}
       {showVoucher && (
-        <ReceiptVoucher voucher={showVoucher} settings={settings} onClose={() => setShowVoucher(null)} />
+        <ReceiptVoucher
+          voucher={showVoucher}
+          settings={settings}
+          onClose={() => setShowVoucher(null)}
+        />
       )}
       {showLedger && (
         <CustomerLedger
           customer={showLedger}
-          transactions={transactions} settlements={settlements}
+          transactions={transactions}
+          settlements={settlements}
           getCustomerOutstanding={getCustomerOutstanding}
           settings={settings}
           onClose={() => setShowLedger(null)}
         />
       )}
+
     </div>
   );
 }
