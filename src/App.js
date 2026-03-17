@@ -217,12 +217,16 @@ export default function App() {
 
         {tab === "billing" && (
           <BillingTab
-            {...billing}
-            customers={customers}
-            products={products}
-            settings={settings}
-            onGoToCustomers={() => setTab("customers")}
-          />
+  {...billing}
+  customers={customers}
+  products={products}
+  settings={settings}
+  onGoToCustomers={() => setTab("customers")}
+  handleConfirmPayment={async () => {
+    const txn = await billing.handleConfirmPayment();
+    if (txn) setShowReceipt(txn);
+  }}
+/>
         )}
 
         {tab === "customers" && (
