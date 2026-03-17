@@ -1,20 +1,5 @@
-
 // ─────────────────────────────────────────────
 // tabs/CustomersTab.jsx
-// Add new customers and view all customers
-// with their billing totals, outstanding
-// credit, and ledger access.
-//
-// Props:
-//   customers              - customer list
-//   setCustomers           - state setter
-//   transactions           - all transactions
-//   settlements            - all settlements
-//   getCustomerOutstanding - (custId) => number
-//   settings               - shop settings
-//   shopCode               - for API calls
-//   onSettle               - (customer) => void  (opens CreditSettleModal)
-//   onViewLedger           - (customer) => void  (opens CustomerLedger)
 // ─────────────────────────────────────────────
 import { useState } from "react";
 import { upsertCustomer } from "../lib/api";
@@ -29,9 +14,9 @@ export function CustomersTab({
   settings, shopCode,
   onSettle, onViewLedger,
 }) {
-  const [newName, setNewName]       = useState("");
-  const [newPhone, setNewPhone]     = useState("");
-  const [custError, setCustError]   = useState("");
+  const [newName, setNewName]         = useState("");
+  const [newPhone, setNewPhone]       = useState("");
+  const [custError, setCustError]     = useState("");
   const [custSuccess, setCustSuccess] = useState("");
   const f = (n) => fmt(n, settings.currency);
 
@@ -49,7 +34,6 @@ export function CustomersTab({
 
   return (
     <>
-      {/* ── Add customer form ── */}
       <div style={card}>
         <div style={{ fontWeight: 700, fontSize: 15, color: "#1e3a5f", marginBottom: 12 }}>➕ New Customer</div>
         <div style={{ marginBottom: 10 }}>
@@ -58,11 +42,9 @@ export function CustomersTab({
         </div>
         <div style={{ marginBottom: 12 }}>
           <label style={lbl}>Phone Number</label>
-          <input
-            value={newPhone}
+          <input value={newPhone}
             onChange={(e) => setNewPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
-            placeholder="10-digit mobile" inputMode="numeric" style={inp}
-          />
+            placeholder="10-digit mobile" inputMode="numeric" style={inp} />
         </div>
         {custError   && <div style={{ color: "#dc2626", fontSize: 13, marginBottom: 8, background: "#fee2e2", padding: "6px 10px", borderRadius: 6 }}>⚠ {custError}</div>}
         {custSuccess && <div style={{ color: "#16a34a", fontSize: 13, marginBottom: 8, background: "#f0fdf4", padding: "6px 10px", borderRadius: 6 }}>✅ {custSuccess}</div>}
@@ -72,12 +54,11 @@ export function CustomersTab({
         </button>
       </div>
 
-      {/* ── Customer list ── */}
       <div style={card}>
         <div style={{ fontWeight: 700, fontSize: 15, color: "#1e3a5f", marginBottom: 12 }}>👥 All Customers ({customers.length})</div>
         {customers.map((c, i) => {
-          const txns       = transactions.filter((t) => t.customer?.id === c.id || t.customerId === c.id);
-          const spent      = txns.filter((t) => !t.void && !t.cancelled).reduce((s, t) => s + (t.total || 0), 0);
+          const txns        = transactions.filter((t) => t.customer?.id === c.id || t.customerId === c.id);
+          const spent       = txns.filter((t) => !t.void && !t.cancelled).reduce((s, t) => s + (t.total || 0), 0);
           const outstanding = getCustomerOutstanding(c.id);
           return (
             <div key={c.id} style={{ padding: "12px 0", borderBottom: i < customers.length - 1 ? "1px solid #f3f4f6" : "none" }}>
