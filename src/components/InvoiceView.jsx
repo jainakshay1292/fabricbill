@@ -160,7 +160,8 @@ export default function InvoiceView({ txn, settings, onClose }) {
       t += row(item.name + " (" + item.qty + "x" + (item.price || 0).toFixed(2) + ")", ((item.price || 0) * (item.qty || 0)).toFixed(2)) + "\n";
     });
     t += line + "\n";
-    if (txn.discount > 0) t += row("Discount", "-" + fmt(txn.discount, "")) + "\n";
+    const displayDiscount = Math.round((txn.subtotal - txn.taxable) * 100) / 100;
+if (displayDiscount > 0.01) t += row("Discount", "-" + fmt(displayDiscount, "")) + "\n";
     t += row("Taxable", fmt(txn.taxable, "")) + "\n";
     gstRows.forEach((r) => {
       t += row("CGST " + r.half + "%", fmt(r.cgst, "")) + "\n" + row("SGST " + r.half + "%", fmt(r.sgst, "")) + "\n";
