@@ -299,15 +299,16 @@ export default function App() {
         />
       )}
       {editTxn && (
-        <EditInvoiceModal
-          txn={editTxn}
-          products={products}
-          settings={settings}
-          onSave={handleEditSave}
-          onCancel={() => setEditTxn(null)}
-          onVoidInvoice={() => handleVoidInvoice(editTxn)}
-        />
-      )}
+  <EditInvoiceModal
+    txn={editTxn}
+    products={products}
+    customers={customers}
+    settings={settings}
+    onSave={handleEditSave}
+    onCancel={() => setEditTxn(null)}
+    onVoidInvoice={() => handleVoidInvoice(editTxn)}
+  />
+)}
       {settleCustomer && (
         <CreditSettleModal
           customer={settleCustomer}
