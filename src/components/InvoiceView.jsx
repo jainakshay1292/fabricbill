@@ -247,7 +247,12 @@ export default function InvoiceView({ txn, settings, onClose }) {
               </div>
               <div style={{ width: 210 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", borderBottom: BDR, padding: "3px 6px", fontSize: 10 }}><span>Gross Total</span><span style={{ fontWeight: 600 }}>{f(subtotal)}</span></div>
-                {txn.discount > 0 && <div style={{ display: "flex", justifyContent: "space-between", borderBottom: BDR, padding: "3px 6px", fontSize: 10 }}><span>Less Discount</span><span style={{ fontWeight: 600 }}>{f(txn.discount)}</span></div>}
+                {(txn.subtotal - txn.taxable - (txn.gst || 0)) > 0.01 && (
+  <div style={{ display: "flex", justifyContent: "space-between", borderBottom: BDR, padding: "3px 6px", fontSize: 10 }}>
+    <span>Less Discount</span>
+    <span style={{ fontWeight: 600 }}>{f(Math.round((txn.subtotal - txn.taxable - (txn.gst || 0)) * 100) / 100)}</span>
+  </div>
+)}
                 <div style={{ display: "flex", justifyContent: "space-between", borderBottom: BDR, padding: "3px 6px", fontSize: 10 }}><span>Taxable Value</span><span style={{ fontWeight: 600 }}>{f(txn.taxable)}</span></div>
                 {gstRows.map((r) => (
                   <Fragment key={r.rate}>
