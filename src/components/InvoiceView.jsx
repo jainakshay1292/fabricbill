@@ -1,21 +1,21 @@
 // ─────────────────────────────────────────────
-// components/InvoiceView.jsx
-// Full invoice modal with print / WhatsApp /
-// PDF / Thermal options.
-//
-// Props:
-//   txn      - transaction object
-//   settings - shop settings
-//   onClose  - close modal callback
+// src/components/InvoiceView.jsx
+// Full invoice modal with:
+//   - Print (browser)
+//   - WhatsApp (AiSensy API with PDF)
+//   - PDF download/share
+//   - Thermal print text
 // ─────────────────────────────────────────────
 
 import { useState, Fragment } from "react";
 import { fmt, fmtDate, numToWords } from "../utils/format";
 import { buildGstRows } from "../utils/gst";
 import { BDR, tds } from "../styles";
+import { uploadPDF, sendWhatsApp } from "../lib/api";
 
 export default function InvoiceView({ txn, settings, onClose }) {
   const [showThermal, setShowThermal] = useState(false);
+  const [sending, setSending]         = useState(false);
   const f = (n) => fmt(n, settings.currency);
 
   // ── Derived values ────────────────────────────────────────
@@ -31,26 +31,10 @@ export default function InvoiceView({ txn, settings, onClose }) {
   const paymentLabel = hasSplit
     ? txn.payments.filter((p) => p.amount > 0).map((p) => p.mode + ": " + f(p.amount)).join(" | ")
     : txn.payments?.[0]?.mode || txn.paymentMode || "Cash";
-
   const isVoid = txn.void || txn.cancelled;
 
-  // ── Print (browser print dialog) ─────────────────────────
-  const doPrint = () => {
-    const el  = document.getElementById("inv-print");
-    const win = window.open("", "_blank");
-    if (!win || !el) return;
-    win.document.write(`
-      <html><head><title>Invoice ${txn.invoiceNo}</title>
-      <style>body{font-family:monospace;margin:20px;}table{width:100%;border-collapse:collapse;}td,th{border:1px solid #000;padding:4px 6px;font-size:11px;}</style>
-      </head><body>${el.innerHTML}
-      <br/><button onclick="window.print();window.close();" style="padding:10px 24px;background:#1e3a5f;color:#fff;border:none;border-radius:8px;font-size:14px;cursor:pointer;">Print / Save PDF</button>
-      </body></html>`);
-    win.document.close();
-  };
-
-  // ── PDF share (html2canvas + jsPDF) ──────────────────────
-  const doSharePDF = async () => {
-    const el = document.getElementById("inv-print");
+  // ── Load jsPDF + html2canvas dynamically ─────────────────
+  const loadPDFLibs = async () => {
     if (!window.html2canvas)
       await new Promise((res, rej) => {
         const s = document.createElement("script");
@@ -65,43 +49,103 @@ export default function InvoiceView({ txn, settings, onClose }) {
         s.onload = res; s.onerror = rej;
         document.head.appendChild(s);
       });
+  };
+
+  // ── Generate PDF blob ─────────────────────────────────────
+  const generatePDFBase64 = async () => {
+    await loadPDFLibs();
+    const el = document.getElementById("inv-print");
+    const canvas = await window.html2canvas(el, { scale: 2, useCORS: true, backgroundColor: "#fff" });
+    const { jsPDF } = window.jspdf;
+    const pdf  = new jsPDF({ orientation: "portrait", unit: "mm", format: "a5" });
+    const pdfW = pdf.internal.pageSize.getWidth();
+    pdf.addImage(canvas.toDataURL("image/jpeg", 0.95), "JPEG", 0, 0, pdfW, (canvas.height * pdfW) / canvas.width);
+    // Return as base64 string
+    return pdf.output("datauristring").split(",")[1];
+  };
+
+  // ── Print (browser print dialog) ─────────────────────────
+  const doPrint = () => {
+    const el  = document.getElementById("inv-print");
+    const win = window.open("", "_blank");
+    if (!win || !el) return;
+    win.document.write(`<html><head><title>Invoice ${txn.invoiceNo}</title>
+      <style>body{font-family:monospace;margin:20px;}table{width:100%;border-collapse:collapse;}td,th{border:1px solid #000;padding:4px 6px;font-size:11px;}</style>
+      </head><body>${el.innerHTML}
+      <br/><button onclick="window.print();window.close();">Print / Save PDF</button>
+      </body></html>`);
+    win.document.close();
+  };
+
+  // ── WhatsApp via AiSensy (PDF) ────────────────────────────
+  const doWhatsApp = async () => {
+    const phone = txn.customer?.phone || txn.customerPhone || "";
+
+    // Fallback if no phone
+    if (!phone || phone.length !== 10) {
+      alert("No valid phone number for this customer.");
+      return;
+    }
+
+    setSending(true);
     try {
-      const canvas = await window.html2canvas(el, { scale: 2, useCORS: true, backgroundColor: "#fff" });
-      const { jsPDF } = window.jspdf;
-      const pdf  = new jsPDF({ orientation: "portrait", unit: "mm", format: "a5" });
-      const pdfW = pdf.internal.pageSize.getWidth();
-      pdf.addImage(canvas.toDataURL("image/jpeg", 0.95), "JPEG", 0, 0, pdfW, (canvas.height * pdfW) / canvas.width);
-      const blob = pdf.output("blob");
-      const file = new File([blob], "Invoice-" + txn.invoiceNo.replace("/", "-") + ".pdf", { type: "application/pdf" });
+      // 1. Generate PDF as base64
+      const base64    = await generatePDFBase64();
+      const filename  = `Invoice-${txn.invoiceNo.replace("/", "-")}.pdf`;
+
+      // 2. Upload PDF to Vercel Blob → get public URL
+      const pdfUrl = await uploadPDF(base64, filename);
+
+      // 3. Send via AiSensy with PDF URL
+      await sendWhatsApp(
+        phone,
+        "invoice_sent",
+        [
+          txn.customer?.name || txn.customerName || "Customer",  // {{1}}
+          settings.shopName,                                      // {{2}}
+          txn.invoiceNo,                                          // {{3}}
+          fmtDate(txn.date),                                      // {{4}}
+          fmt(total, settings.currency),                          // {{5}}
+          txn.payments?.[0]?.mode || txn.paymentMode || "Cash",  // {{6}}
+          settings.footerNote || "Thank you for your business!", // {{7}}
+        ],
+        pdfUrl,    // PDF URL for AiSensy
+        filename,  // filename shown in WhatsApp
+      );
+
+      alert("✅ Invoice sent on WhatsApp with PDF!");
+    } catch (e) {
+      console.error("WhatsApp error:", e.message);
+      alert("❌ Could not send WhatsApp: " + e.message);
+    } finally {
+      setSending(false);
+    }
+  };
+
+  // ── PDF download/share ────────────────────────────────────
+  const doSharePDF = async () => {
+    setSending(true);
+    try {
+      const base64   = await generatePDFBase64();
+      const filename = `Invoice-${txn.invoiceNo.replace("/", "-")}.pdf`;
+      // Convert base64 to blob for download
+      const byteChars   = atob(base64);
+      const byteNumbers = new Array(byteChars.length).fill(0).map((_, i) => byteChars.charCodeAt(i));
+      const byteArray   = new Uint8Array(byteNumbers);
+      const blob        = new Blob([byteArray], { type: "application/pdf" });
+      const file        = new File([blob], filename, { type: "application/pdf" });
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
         await navigator.share({ title: "Invoice " + txn.invoiceNo, files: [file] });
       } else {
         const url = URL.createObjectURL(blob);
-        const a = document.createElement("a"); a.href = url; a.download = file.name; a.click();
+        const a = document.createElement("a"); a.href = url; a.download = filename; a.click();
         URL.revokeObjectURL(url);
       }
     } catch {
       alert("Could not generate PDF. Try on mobile Chrome.");
+    } finally {
+      setSending(false);
     }
-  };
-
-  // ── WhatsApp message ──────────────────────────────────────
-  const doWhatsApp = () => {
-    let msg = `🧵 *${settings.shopName}*\n_${settings.shopTagline || ""}_\n${settings.shopAddress}\nGSTIN: ${settings.gstin}\n─────────────────────\n`;
-    if (isVoid) msg += "❌ *VOID / CANCELLED INVOICE*\n─────────────────────\n";
-    msg += `🧾 *INVOICE: ${txn.invoiceNo}*\n📅 Date: ${fmtDate(txn.date)}\n👤 Buyer: *${txn.customer?.name || txn.customerName}*\n`;
-    txn.items.forEach((item, i) => {
-      msg += `${i + 1}. ${item.name}\n   ${item.qty} x ${f(item.price)} = *${f(item.price * item.qty)}* (GST ${((item.gstRate || 0) * 100).toFixed(0)}%)\n`;
-    });
-    msg += `─────────────────────\nGross Total: ${f(subtotal)}\n`;
-    if (txn.discount > 0) msg += `Discount: -${f(txn.discount)}\n`;
-    msg += `Taxable Value: ${f(txn.taxable)}\n`;
-    gstRows.forEach((r) => { msg += `CGST @${r.half}%: ${f(r.cgst)}\nSGST @${r.half}%: ${f(r.sgst)}\n`; });
-    msg += `─────────────────────\n💰 *Net Amount: ${f(total)}*\n💳 Payment: ${paymentLabel}\n`;
-    if (creditAmt > 0) msg += `⚠️ *Amount Due (Credit): ${f(creditAmt)}*\n`;
-    msg += `─────────────────────\n_${amtWords}_\n\n${settings.footerNote}\n*${settings.signoff}*`;
-    const phone = txn.customer?.phone || txn.customerPhone || "";
-    window.open((phone ? `https://wa.me/91${phone}` : "https://wa.me/") + "?text=" + encodeURIComponent(msg), "_blank");
   };
 
   // ── Thermal text ──────────────────────────────────────────
@@ -129,10 +173,8 @@ export default function InvoiceView({ txn, settings, onClose }) {
 
   // ── Render ────────────────────────────────────────────────
   return (
-    <div
-      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", display: "flex", alignItems: "flex-end", zIndex: 100 }}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
-    >
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", display: "flex", alignItems: "flex-end", zIndex: 100 }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div style={{ background: "#fff", borderRadius: "20px 20px 0 0", padding: 16, width: "100%", maxWidth: 480, margin: "0 auto", maxHeight: "92vh", overflowY: "auto" }}>
 
         {/* Void banner */}
@@ -187,17 +229,15 @@ export default function InvoiceView({ txn, settings, onClose }) {
                   <td style={tds({ textAlign: "right", fontWeight: 600, color: item.qty < 0 ? "#dc2626" : "inherit" })}>{((item.price || 0) * (item.qty || 0)).toFixed(2)}</td>
                 </tr>
               ))}
-              {/* Empty rows to pad table to minimum 4 lines */}
               {Array(Math.max(0, 4 - (txn.items || []).length)).fill(0).map((_, i) => (
-                <tr key={"e" + i}>{[0, 1, 2, 3, 4, 5].map((c) => <td key={c} style={tds({ height: 20 })}>&nbsp;</td>)}</tr>
+                <tr key={"e" + i}>{[0,1,2,3,4,5].map((c) => <td key={c} style={tds({ height: 20 })}>&nbsp;</td>)}</tr>
               ))}
             </tbody>
           </table>
 
-          {/* Totals + amount-in-words */}
+          {/* Totals */}
           <div style={{ borderLeft: BDR, borderRight: BDR, borderBottom: BDR }}>
             <div style={{ display: "flex" }}>
-              {/* Left: words + payment */}
               <div style={{ flex: 1, padding: "6px 8px", borderRight: BDR, fontSize: 10 }}>
                 <b>Amount in Words:</b><br />{amtWords}
                 <div style={{ marginTop: 6, paddingTop: 4, borderTop: "1px dashed #999" }}>
@@ -205,7 +245,6 @@ export default function InvoiceView({ txn, settings, onClose }) {
                   {creditAmt > 0 && <div style={{ fontWeight: 700, color: "#dc2626", marginTop: 2 }}>⚠ Due: {f(creditAmt)}</div>}
                 </div>
               </div>
-              {/* Right: GST breakdown */}
               <div style={{ width: 210 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", borderBottom: BDR, padding: "3px 6px", fontSize: 10 }}><span>Gross Total</span><span style={{ fontWeight: 600 }}>{f(subtotal)}</span></div>
                 {txn.discount > 0 && <div style={{ display: "flex", justifyContent: "space-between", borderBottom: BDR, padding: "3px 6px", fontSize: 10 }}><span>Less Discount</span><span style={{ fontWeight: 600 }}>{f(txn.discount)}</span></div>}
@@ -255,13 +294,13 @@ export default function InvoiceView({ txn, settings, onClose }) {
         <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 6, marginTop: 14 }}>
           {[
             ["🖨️", "Print",   "#16a34a", doPrint],
-            ["💬", "WA",      "#25d366", doWhatsApp],
+            ["💬", sending ? "…" : "WA", "#25d366", doWhatsApp],
             ["📄", "PDF",     "#128c7e", doSharePDF],
             ["🖨️", "Thermal", "#2563eb", () => setShowThermal(true)],
             ["✖",  "Close",   "#1e3a5f", onClose],
           ].map(([icon, label, bg, fn]) => (
-            <button key={label} onClick={fn}
-              style={{ padding: "11px 0", background: bg, color: "#fff", border: "none", borderRadius: 12, fontSize: 11, fontWeight: 800, cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
+            <button key={label} onClick={fn} disabled={sending}
+              style={{ padding: "11px 0", background: bg, color: "#fff", border: "none", borderRadius: 12, fontSize: 11, fontWeight: 800, cursor: sending ? "wait" : "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 2, opacity: sending ? 0.7 : 1 }}>
               <span style={{ fontSize: 16 }}>{icon}</span><span>{label}</span>
             </button>
           ))}
