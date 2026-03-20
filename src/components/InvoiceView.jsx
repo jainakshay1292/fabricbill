@@ -4,7 +4,7 @@
 //   - Print (browser)
 //   - WhatsApp (AiSensy API with PDF)
 //   - PDF download/share
-//   - Thermal print text
+//   - Thermal print (actual print command)
 // ─────────────────────────────────────────────
 
 import { useState, Fragment } from "react";
@@ -60,7 +60,6 @@ export default function InvoiceView({ txn, settings, onClose }) {
     const pdf  = new jsPDF({ orientation: "portrait", unit: "mm", format: "a5" });
     const pdfW = pdf.internal.pageSize.getWidth();
     pdf.addImage(canvas.toDataURL("image/jpeg", 0.95), "JPEG", 0, 0, pdfW, (canvas.height * pdfW) / canvas.width);
-    // Return as base64 string
     return pdf.output("datauristring").split(",")[1];
   };
 
@@ -80,39 +79,30 @@ export default function InvoiceView({ txn, settings, onClose }) {
   // ── WhatsApp via AiSensy (PDF) ────────────────────────────
   const doWhatsApp = async () => {
     const phone = txn.customer?.phone || txn.customerPhone || "";
-
-    // Fallback if no phone
     if (!phone || phone.length !== 10) {
       alert("No valid phone number for this customer.");
       return;
     }
-
     setSending(true);
     try {
-      // 1. Generate PDF as base64
       const base64    = await generatePDFBase64();
       const filename  = `Invoice-${txn.invoiceNo.replace("/", "-")}.pdf`;
-
-      // 2. Upload PDF to Vercel Blob → get public URL
       const pdfUrl = await uploadPDF(base64, filename);
-
-      // 3. Send via AiSensy with PDF URL
       await sendWhatsApp(
         phone,
         "invoice_sent",
         [
-          txn.customer?.name || txn.customerName || "Customer",  // {{1}}
-          settings.shopName,                                      // {{2}}
-          txn.invoiceNo,                                          // {{3}}
-          fmtDate(txn.date),                                      // {{4}}
-          fmt(total, settings.currency),                          // {{5}}
-          txn.payments?.[0]?.mode || txn.paymentMode || "Cash",  // {{6}}
-          settings.footerNote || "Thank you for your business!", // {{7}}
+          txn.customer?.name || txn.customerName || "Customer",
+          settings.shopName,
+          txn.invoiceNo,
+          fmtDate(txn.date),
+          fmt(total, settings.currency),
+          txn.payments?.[0]?.mode || txn.paymentMode || "Cash",
+          settings.footerNote || "Thank you for your business!",
         ],
-        pdfUrl,    // PDF URL for AiSensy
-        filename,  // filename shown in WhatsApp
+        pdfUrl,
+        filename,
       );
-
       alert("✅ Invoice sent on WhatsApp with PDF!");
     } catch (e) {
       console.error("WhatsApp error:", e.message);
@@ -128,7 +118,6 @@ export default function InvoiceView({ txn, settings, onClose }) {
     try {
       const base64   = await generatePDFBase64();
       const filename = `Invoice-${txn.invoiceNo.replace("/", "-")}.pdf`;
-      // Convert base64 to blob for download
       const byteChars   = atob(base64);
       const byteNumbers = new Array(byteChars.length).fill(0).map((_, i) => byteChars.charCodeAt(i));
       const byteArray   = new Uint8Array(byteNumbers);
@@ -161,7 +150,7 @@ export default function InvoiceView({ txn, settings, onClose }) {
     });
     t += line + "\n";
     const displayDiscount = Math.round((txn.subtotal - txn.taxable) * 100) / 100;
-if (displayDiscount > 0.01) t += row("Discount", "-" + fmt(displayDiscount, "")) + "\n";
+    if (displayDiscount > 0.01) t += row("Discount", "-" + fmt(displayDiscount, "")) + "\n";
     t += row("Taxable", fmt(txn.taxable, "")) + "\n";
     gstRows.forEach((r) => {
       t += row("CGST " + r.half + "%", fmt(r.cgst, "")) + "\n" + row("SGST " + r.half + "%", fmt(r.sgst, "")) + "\n";
@@ -170,6 +159,43 @@ if (displayDiscount > 0.01) t += row("Discount", "-" + fmt(displayDiscount, ""))
     if (creditAmt > 0) t += "AMOUNT DUE: " + fmt(creditAmt, "") + "\n";
     t += "\nAmt: " + amtWords + "\n" + line + "\n" + ctr(settings.footerNote || "") + "\n" + ctr(settings.signoff || "") + "\n\n\n";
     return t;
+  };
+
+  // ── Thermal print (sends actual print command) ────────────
+  const doThermalPrint = () => {
+    const thermalText = buildThermal();
+    const win = window.open("", "_blank");
+    if (!win) {
+      alert("Popup blocked. Please allow popups for this site.");
+      return;
+    }
+    win.document.write(`<html><head><title>Thermal Print</title>
+      <style>
+        @page { margin: 0; size: 80mm auto; }
+        body {
+          font-family: monospace;
+          font-size: 12px;
+          margin: 2mm;
+          padding: 0;
+          white-space: pre-wrap;
+          word-wrap: break-word;
+          width: 76mm;
+        }
+        @media print {
+          .no-print { display: none !important; }
+        }
+      </style>
+    </head><body>${thermalText.replace(/\n/g, "<br/>")}<div class="no-print" style="margin-top:20px;text-align:center;">
+      <button onclick="window.print();" style="padding:10px 24px;font-size:16px;font-weight:bold;cursor:pointer;background:#16a34a;color:#fff;border:none;border-radius:8px;">🖨️ Print Now</button>
+      <button onclick="window.close();" style="padding:10px 24px;font-size:16px;cursor:pointer;background:#e5e7eb;border:none;border-radius:8px;margin-left:8px;">Close</button>
+    </div>
+    <script>
+      window.onload = function() {
+        window.print();
+      };
+    </script>
+    </body></html>`);
+    win.document.close();
   };
 
   // ── Render ────────────────────────────────────────────────
@@ -249,11 +275,11 @@ if (displayDiscount > 0.01) t += row("Discount", "-" + fmt(displayDiscount, ""))
               <div style={{ width: 210 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", borderBottom: BDR, padding: "3px 6px", fontSize: 10 }}><span>Gross Total</span><span style={{ fontWeight: 600 }}>{f(subtotal)}</span></div>
                 {(txn.subtotal - txn.taxable) > 0.01 && (
-  <div style={{ display: "flex", justifyContent: "space-between", borderBottom: BDR, padding: "3px 6px", fontSize: 10 }}>
-    <span>Less Discount</span>
-    <span style={{ fontWeight: 600 }}>{f(Math.round((txn.subtotal - txn.taxable) * 100) / 100)}</span>
-  </div>
-)}
+                  <div style={{ display: "flex", justifyContent: "space-between", borderBottom: BDR, padding: "3px 6px", fontSize: 10 }}>
+                    <span>Less Discount</span>
+                    <span style={{ fontWeight: 600 }}>{f(Math.round((txn.subtotal - txn.taxable) * 100) / 100)}</span>
+                  </div>
+                )}
                 <div style={{ display: "flex", justifyContent: "space-between", borderBottom: BDR, padding: "3px 6px", fontSize: 10 }}><span>Taxable Value</span><span style={{ fontWeight: 600 }}>{f(txn.taxable)}</span></div>
                 {gstRows.map((r) => (
                   <Fragment key={r.rate}>
@@ -302,7 +328,7 @@ if (displayDiscount > 0.01) t += row("Discount", "-" + fmt(displayDiscount, ""))
             ["🖨️", "Print",   "#16a34a", doPrint],
             ["💬", sending ? "…" : "WA", "#25d366", doWhatsApp],
             ["📄", "PDF",     "#128c7e", doSharePDF],
-            ["🖨️", "Thermal", "#2563eb", () => setShowThermal(true)],
+            ["🖨️", "Thermal", "#2563eb", doThermalPrint],
             ["✖",  "Close",   "#1e3a5f", onClose],
           ].map(([icon, label, bg, fn]) => (
             <button key={label} onClick={fn} disabled={sending}
@@ -312,7 +338,7 @@ if (displayDiscount > 0.01) t += row("Discount", "-" + fmt(displayDiscount, ""))
           ))}
         </div>
 
-        {/* Thermal modal */}
+        {/* Thermal modal (kept as fallback for copy) */}
         {showThermal && (
           <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 200, display: "flex", alignItems: "flex-end" }}
             onClick={(e) => { if (e.target === e.currentTarget) setShowThermal(false); }}>
