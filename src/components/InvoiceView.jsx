@@ -12,6 +12,7 @@ import { fmt, fmtDate, numToWords } from "../utils/format";
 import { buildGstRows } from "../utils/gst";
 import { BDR, tds } from "../styles";
 import { uploadPDF, sendWhatsApp } from "../lib/api";
+import { printViaBluetooth } from "../utils/bluetoothPrint";
 
 export default function InvoiceView({ txn, settings, onClose }) {
   const [showThermal, setShowThermal] = useState(false);
@@ -161,9 +162,24 @@ export default function InvoiceView({ txn, settings, onClose }) {
     return t;
   };
 
-  // ── Thermal print (sends actual print command) ────────────
-  const doThermalPrint = () => {
+  const doThermalPrint = async () => {
     const thermalText = buildThermal();
+
+    // Try Bluetooth first (mobile), fallback to window.print
+    if (navigator.bluetooth) {
+      try {
+        await printViaBluetooth(thermalText);
+        alert("✅ Printed via Bluetooth!");
+        return;
+      } catch (e) {
+        const fallback = confirm(
+          "Bluetooth print failed: " + e.message + "\n\nOpen browser print dialog instead?"
+        );
+        if (!fallback) return;
+      }
+    }
+
+    // Fallback: browser print dialog (works with RawBT / USB printers)
     const win = window.open("", "_blank");
     if (!win) {
       alert("Popup blocked. Please allow popups for this site.");
@@ -189,11 +205,7 @@ export default function InvoiceView({ txn, settings, onClose }) {
       <button onclick="window.print();" style="padding:10px 24px;font-size:16px;font-weight:bold;cursor:pointer;background:#16a34a;color:#fff;border:none;border-radius:8px;">🖨️ Print Now</button>
       <button onclick="window.close();" style="padding:10px 24px;font-size:16px;cursor:pointer;background:#e5e7eb;border:none;border-radius:8px;margin-left:8px;">Close</button>
     </div>
-    <script>
-      window.onload = function() {
-        window.print();
-      };
-    </script>
+    <script>window.onload = function() { window.print(); };</script>
     </body></html>`);
     win.document.close();
   };
