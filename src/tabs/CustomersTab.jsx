@@ -27,15 +27,22 @@ export function CustomersTab({
 
   const f = (n) => fmt(n, settings.currency);
 
-  // ── Filter customers by name or phone ────────
+  // ── Sort alphabetically, walk-in always first ─
+  const sorted = [...customers].sort((a, b) => {
+    if (a.id === "c1") return -1;
+    if (b.id === "c1") return 1;
+    return a.name.localeCompare(b.name);
+  });
+
+  // ── Filter by name or phone ───────────────────
   const q = search.trim().toLowerCase();
   const filtered = q
-    ? customers.filter(
+    ? sorted.filter(
         (c) =>
           c.name.toLowerCase().includes(q) ||
           (c.phone || "").includes(q)
       )
-    : customers;
+    : sorted;
 
   const noResults = q && filtered.length === 0;
 
