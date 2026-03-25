@@ -3,6 +3,7 @@
 // ─────────────────────────────────────────────
 import { fmt } from "../utils/format";
 import { card, inp, lbl } from "../styles";
+import { useState } from "react";
 
 export function BillingTab({
   cart, cartWithTax, validCart,
@@ -22,6 +23,30 @@ export function BillingTab({
   onGoToCustomers,
 }) {
   const f = (n) => fmt(n, settings.currency);
+  const [custSearch, setCustSearch] = useState("");
+  const [custOpen, setCustOpen]     = useState(false);
+
+  // Sort alphabetically, walk-in pinned first
+  const sortedCustomers = [...customers].sort((a, b) => {
+    if (a.id === "c1") return -1;
+    if (b.id === "c1") return 1;
+    return a.name.localeCompare(b.name);
+  });
+
+  const q = custSearch.trim().toLowerCase();
+  const filteredCustomers = q
+    ? sortedCustomers.filter(
+        (c) => c.name.toLowerCase().includes(q) || (c.phone || "").includes(q)
+      )
+    : sortedCustomers;
+
+  const selectedCust = customers.find((c) => c.id === selectedCustomer);
+
+  const pickCustomer = (id) => {
+    setSelectedCustomer(id);
+    setCustSearch("");
+    setCustOpen(false);
+  };
 
   return (
     <>
@@ -29,15 +54,41 @@ export function BillingTab({
       <div style={card}>
         <div style={{ ...lbl, marginBottom: 6 }}>Customer</div>
         <div style={{ display: "flex", gap: 8 }}>
-          <select
-            value={selectedCustomer}
-            onChange={(e) => setSelectedCustomer(e.target.value)}
-            style={{ ...inp, flex: 1, margin: 0, borderColor: creditNeedsCustomer ? "#dc2626" : "#d1d5db" }}
-          >
-            {customers.map((c) => (
-              <option key={c.id} value={c.id}>{c.name}{c.phone ? " · " + c.phone : ""}</option>
-            ))}
-          </select>
+          <div style={{ flex: 1, position: "relative" }}>
+            {/* Search / selected display */}
+            <input
+              value={custOpen ? custSearch : (selectedCust ? selectedCust.name + (selectedCust.phone ? " · " + selectedCust.phone : "") : "")}
+              onChange={(e) => { setCustSearch(e.target.value); setCustOpen(true); }}
+              onFocus={() => { setCustSearch(""); setCustOpen(true); }}
+              onBlur={() => setTimeout(() => setCustOpen(false), 180)}
+              placeholder="Search by name or phone..."
+              style={{ ...inp, margin: 0, borderColor: creditNeedsCustomer ? "#dc2626" : "#d1d5db", width: "100%" }}
+            />
+            {/* Dropdown list */}
+            {custOpen && (
+              <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#fff", border: "1px solid #d1d5db", borderRadius: 8, boxShadow: "0 4px 16px rgba(0,0,0,0.12)", zIndex: 50, maxHeight: 220, overflowY: "auto", marginTop: 2 }}>
+                {filteredCustomers.length === 0 ? (
+                  <div style={{ padding: "12px 14px", fontSize: 13, color: "#9ca3af" }}>No customer found</div>
+                ) : (
+                  filteredCustomers.map((c) => (
+                    <div
+                      key={c.id}
+                      onMouseDown={() => pickCustomer(c.id)}
+                      style={{
+                        padding: "10px 14px", cursor: "pointer", fontSize: 13,
+                        background: c.id === selectedCustomer ? "#eff6ff" : "transparent",
+                        borderBottom: "1px solid #f3f4f6",
+                        display: "flex", justifyContent: "space-between", alignItems: "center",
+                      }}
+                    >
+                      <span style={{ fontWeight: c.id === selectedCustomer ? 700 : 500 }}>{c.name}</span>
+                      {c.phone && <span style={{ fontSize: 11, color: "#9ca3af" }}>{c.phone}</span>}
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
           <button onClick={onGoToCustomers}
             style={{ padding: "10px 14px", background: "#1e3a5f", color: "#fff", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 700, whiteSpace: "nowrap" }}>
             + New
