@@ -1,4 +1,3 @@
-
 // ─────────────────────────────────────────────
 // tabs/ProductsTab.jsx
 // Admin-only. Add products with optional fixed
@@ -75,7 +74,7 @@ export function ProductsTab({ products, setProducts, settings, shopCode }) {
       <div style={card}>
         <div style={{ fontWeight: 700, fontSize: 15, color: "#1e3a5f", marginBottom: 12 }}>📦 Products ({products.length})</div>
         {products.length === 0 && <div style={{ color: "#9ca3af", fontSize: 13, textAlign: "center", padding: "20px 0" }}>No products yet.</div>}
-        {products.map((p, i) => (
+        {[...products].sort((a, b) => a.name.localeCompare(b.name)).map((p, i) => (
           <div key={p.id || p.name} style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 0", borderBottom: i < products.length - 1 ? "1px solid #f3f4f6" : "none" }}>
             <div style={{ flex: 1 }}>
               <div style={{ fontWeight: 600, fontSize: 14 }}>{p.name}</div>
