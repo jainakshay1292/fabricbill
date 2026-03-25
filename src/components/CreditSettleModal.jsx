@@ -6,15 +6,21 @@ import { fmt } from "../utils/format";
 import { inp, lbl } from "../styles";
 
 export function CreditSettleModal({ customer, outstanding, settings, onConfirm, onCancel }) {
-  const [amount, setAmount] = useState("");
-  const [mode, setMode]     = useState("Cash");
+  const [amount, setAmount]   = useState("");
+  const [mode, setMode]       = useState("Cash");
+  const [saving, setSaving]   = useState(false);
   const f = (n) => fmt(n, settings.currency);
 
-  const handleConfirm = () => {
+  const handleConfirm = async () => {
     const amt = parseFloat(String(amount).trim());
     if (isNaN(amt) || amt <= 0) return alert("Enter a valid amount");
     if (amt > outstanding + 0.01) return alert("Amount cannot exceed outstanding " + f(outstanding));
-    onConfirm(amt, mode);
+    setSaving(true);
+    try {
+      await onConfirm(amt, mode);
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -43,9 +49,9 @@ export function CreditSettleModal({ customer, outstanding, settings, onConfirm, 
             ))}
           </div>
         </div>
-        <button onClick={handleConfirm}
-          style={{ width: "100%", padding: "13px 0", background: "#16a34a", color: "#fff", border: "none", borderRadius: 10, fontSize: 15, fontWeight: 800, cursor: "pointer", marginBottom: 8 }}>
-          ✅ Confirm Settlement
+        <button onClick={handleConfirm} disabled={saving}
+          style={{ width: "100%", padding: "13px 0", background: saving ? "#9ca3af" : "#16a34a", color: "#fff", border: "none", borderRadius: 10, fontSize: 15, fontWeight: 800, cursor: saving ? "not-allowed" : "pointer", marginBottom: 8 }}>
+          {saving ? "Saving…" : "✅ Confirm Settlement"}
         </button>
         <button onClick={onCancel}
           style={{ width: "100%", padding: "11px 0", background: "#f3f4f6", color: "#374151", border: "none", borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
