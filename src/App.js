@@ -46,11 +46,20 @@ export default function App() {
     try { return localStorage.getItem("fabricbill_shopcode") || null; } catch { return null; }
   });
 
-  // Role is NOT restored from localStorage on refresh.
-  // The session token lives in memory only — once the page is refreshed
-  // the token is gone, so the user must re-enter their PIN to get a
-  // fresh token. This prevents "Unauthorised: Missing session token" errors.
-  const [role, setRole] = useState(null);
+  // Restore role + token from localStorage so user doesn't need to
+  // re-enter PIN on every refresh. Token expiry is checked on load —
+  // if expired, role is null and PIN screen shows as normal.
+  const [role, setRole] = useState(() => {
+    try {
+      const s = localStorage.getItem("fabricbill_session");
+      if (!s) return null;
+      const { role, token, expiry } = JSON.parse(s);
+      if (!role || !token || Date.now() > expiry) return null;
+      // Re-hydrate the in-memory token so mutations work immediately
+      import("./lib/api").then(({ setSessionToken }) => setSessionToken(token));
+      return role;
+    } catch { return null; }
+  });
 
   // ── UI state ──────────────────────────────────
   const [tab, setTab] = useState("billing");
@@ -90,13 +99,24 @@ export default function App() {
   const handleLogin = (r, token) => {
     setRole(r);
     setTab("billing");
-    // Token lives in memory only — never written to localStorage
-    if (token) setSessionToken(token);
+    if (token) {
+      setSessionToken(token);
+      // Persist token so refresh doesn't require re-entering PIN.
+      // Token expires in 24h — after that the PIN screen shows again.
+      try {
+        localStorage.setItem("fabricbill_session", JSON.stringify({
+          role:   r,
+          token,
+          expiry: Date.now() + 24 * 60 * 60 * 1000,
+        }));
+      } catch {}
+    }
   };
 
   const handleLogout = () => {
     setRole(null);
     clearSessionToken();
+    try { localStorage.removeItem("fabricbill_session"); } catch {}
   };
 
   const handleEnterShop = (code) => {
