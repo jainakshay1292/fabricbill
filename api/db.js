@@ -28,6 +28,7 @@ const IP_WINDOW_MS      = 60 * 1000;
 // Fix 4: Only these table names may be passed from the client
 const ALLOWED_TABLES = new Set([
   "settings", "transactions", "customers", "products", "settlements",
+  "employees", "attendance",
 ]);
 
 // Read-only actions that work before a session token exists
