@@ -198,17 +198,20 @@ async function hashPin(pin) {
 //   );
 //
 async function writeLoginAudit(shopCode, role, result, ip) {
-  // Geo-lookup from server side — no browser permission needed
+  // Geo-lookup using ip-api.com (free, no key, works from Vercel servers)
   let city = null, region = null, country = null;
   try {
-    const geo = await fetch(`https://ipapi.co/${encodeURIComponent(ip)}/json/`, {
-      signal: AbortSignal.timeout(3000),
-    });
+    const geo = await fetch(
+      `http://ip-api.com/json/${encodeURIComponent(ip)}?fields=status,city,regionName,country`,
+      { signal: AbortSignal.timeout(4000) }
+    );
     if (geo.ok) {
       const g = await geo.json();
-      city    = g.city    || null;
-      region  = g.region  || null;
-      country = g.country_name || null;
+      if (g.status === "success") {
+        city    = g.city       || null;
+        region  = g.regionName || null;
+        country = g.country    || null;
+      }
     }
   } catch {
     // Location is best-effort — never block login on geo failure
@@ -237,9 +240,10 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
+  // x-real-ip is set by Vercel and always reflects the true client IP
   const ip = (
-    req.headers["x-forwarded-for"]?.split(",")[0]?.trim() ||
     req.headers["x-real-ip"] ||
+    req.headers["x-forwarded-for"]?.split(",")[0]?.trim() ||
     req.socket?.remoteAddress ||
     "unknown"
   );
