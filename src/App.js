@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { setSessionToken, clearSessionToken } from "./lib/api";
 
 // Styles
@@ -15,11 +15,13 @@ import { RegisterScreen } from "./screens/RegisterScreen";
 import { LoginScreen }    from "./screens/LoginScreen";
 
 // Tabs (shown after login)
-import { BillingTab }   from "./tabs/BillingTab";
+import { BillingTab }      from "./tabs/BillingTab";
+import { AttendanceTab }   from "./tabs/AttendanceTab";
 import { CustomersTab } from "./tabs/CustomersTab";
 import { HistoryTab }   from "./tabs/HistoryTab";
 import { ProductsTab }  from "./tabs/ProductsTab";
-import { SettingsTab }  from "./tabs/SettingsTab";
+import { SettingsTab }    from "./tabs/SettingsTab";
+import { AttendanceTab }  from "./tabs/AttendanceTab";
 
 // Modals — InvoiceView is default export, rest are named exports
 import InvoiceView           from "./components/InvoiceView";
@@ -55,11 +57,20 @@ export default function App() {
       if (!s) return null;
       const { role, token, expiry } = JSON.parse(s);
       if (!role || !token || Date.now() > expiry) return null;
-      // Re-hydrate the in-memory token so mutations work immediately
-      import("./lib/api").then(({ setSessionToken }) => setSessionToken(token));
       return role;
     } catch { return null; }
   });
+
+  // Re-hydrate the session token into memory on first render.
+  // Must be done outside useState (which can't call module functions directly).
+  useEffect(() => {
+    try {
+      const s = localStorage.getItem("fabricbill_session");
+      if (!s) return;
+      const { token, expiry } = JSON.parse(s);
+      if (token && Date.now() < expiry) setSessionToken(token);
+    } catch {}
+  }, []); // runs once on mount
 
   // ── UI state ──────────────────────────────────
   const [tab, setTab] = useState("billing");
@@ -166,9 +177,24 @@ export default function App() {
   };
 
   // ── Nav tabs (staff can't see Products / Settings) ──
-  const navTabs = isAdmin
-    ? [["billing","🧾","Bill"], ["customers","👤","Customers"], ["history","📋","History"], ["products","📦","Products"], ["settings","⚙️","Settings"]]
-    : [["billing","🧾","Bill"], ["customers","👤","Customers"], ["history","📋","History"]];
+  // Core tabs always visible in bottom nav
+  const navTabs = [
+    ["billing",   "🧾", "Bill"],
+    ["customers", "👤", "Customers"],
+    ["history",   "📋", "History"],
+    ["more",      "⋯",  "More"],
+  ];
+
+  // Items inside the More drawer — admin sees everything, staff sees less
+  const moreItems = isAdmin
+    ? [
+        ["products",   "📦", "Products",   "Manage your product catalogue"],
+        ["attendance", "🗓️", "Attendance",  "Track staff attendance"],
+        ["settings",   "⚙️", "Settings",   "Shop & billing settings"],
+      ]
+    : [
+        ["attendance", "🗓️", "Attendance", "View your attendance"],
+      ];
 
   // ─────────────────────────────────────────────
   // Screen guards (shown before main app)
@@ -289,6 +315,10 @@ export default function App() {
           />
         )}
 
+        {tab === "attendance" && (
+          <AttendanceTab shopCode={shopCode} isAdmin={isAdmin} />
+        )}
+
         {tab === "settings" && isAdmin && (
           <SettingsTab
             draftSettings={draftSettings}
@@ -303,14 +333,46 @@ export default function App() {
 
       {/* ── Bottom nav ── */}
       <div style={{ position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 480, background: "#fff", borderTop: "1px solid #e5e7eb", display: "flex", zIndex: 50, boxShadow: "0 -2px 8px rgba(0,0,0,0.06)" }}>
-        {navTabs.map(([key, icon, label]) => (
-          <button key={key} onClick={() => setTab(key)}
-            style={{ flex: 1, padding: "10px 0 8px", border: "none", background: "none", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 2, color: tab === key ? "#1e3a5f" : "#9ca3af", borderTop: tab === key ? "2px solid #1e3a5f" : "2px solid transparent" }}>
-            <span style={{ fontSize: 20 }}>{icon}</span>
-            <span style={{ fontSize: 9, fontWeight: tab === key ? 800 : 500 }}>{label}</span>
-          </button>
-        ))}
+        {navTabs.map(([key, icon, label]) => {
+          const isMoreActive = key === "more" && ["products","attendance","settings"].includes(tab);
+          const isActive     = tab === key || isMoreActive;
+          return (
+            <button key={key}
+              onClick={() => key === "more" ? setTab("more") : setTab(key)}
+              style={{ flex: 1, padding: "10px 0 8px", border: "none", background: "none", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 2, color: isActive ? "#1e3a5f" : "#9ca3af", borderTop: isActive ? "2px solid #1e3a5f" : "2px solid transparent" }}>
+              <span style={{ fontSize: 20 }}>{icon}</span>
+              <span style={{ fontSize: 9, fontWeight: isActive ? 800 : 500 }}>{label}</span>
+            </button>
+          );
+        })}
       </div>
+
+      {/* ── More drawer ── */}
+      {tab === "more" && (
+        <div
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 60, display: "flex", alignItems: "flex-end" }}
+          onClick={() => setTab("billing")}
+        >
+          <div
+            style={{ background: "#fff", borderRadius: "20px 20px 0 0", width: "100%", maxWidth: 480, margin: "0 auto", padding: 20, paddingBottom: 90 }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ fontWeight: 800, fontSize: 16, color: "#1e3a5f", marginBottom: 16 }}>More</div>
+            {moreItems.map(([key, icon, label, desc]) => (
+              <button key={key}
+                onClick={() => setTab(key)}
+                style={{ width: "100%", display: "flex", alignItems: "center", gap: 14, padding: "14px 16px", marginBottom: 8, background: "#f8faff", border: "1px solid #e5e7eb", borderRadius: 12, cursor: "pointer", textAlign: "left" }}>
+                <span style={{ fontSize: 26 }}>{icon}</span>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: 14, color: "#1e3a5f" }}>{label}</div>
+                  <div style={{ fontSize: 12, color: "#9ca3af", marginTop: 1 }}>{desc}</div>
+                </div>
+                <span style={{ marginLeft: "auto", fontSize: 18, color: "#d1d5db" }}>›</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* ── Modals ── */}
       {showReceipt && (
