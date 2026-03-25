@@ -110,11 +110,8 @@ export function LoginScreen({ onLogin, shopCode, onChangeShop }) {
               style={{ width: 66, height: 66, borderRadius: "50%", border: "1px solid #e5e7eb", background: "#f9fafb", color: "#1e3a5f", fontSize: 22, fontWeight: 700, cursor: "pointer" }}>
               0
             </button>
-            {/* Confirm */}
-            <button onClick={submit}
-              style={{ width: 66, height: 66, borderRadius: "50%", border: "none", background: "#1e3a5f", color: "#fff", fontSize: 22, fontWeight: 700, cursor: "pointer" }}>
-              ✓
-            </button>
+            {/* Empty cell — auto-submits on 4th digit, no confirm needed */}
+            <div style={{ width: 66, height: 66 }} />
           </div>
 
           <button onClick={() => { setRole(null); setPin(""); setErr(""); }}
