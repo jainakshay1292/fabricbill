@@ -182,6 +182,55 @@ async function hashPin(pin) {
     .join("");
 }
 
+// ── Login audit (location via server-side IP lookup) ───────
+// Run once in Supabase SQL editor:
+//
+//   CREATE TABLE IF NOT EXISTS login_audit (
+//     id           bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+//     timestamp    timestamptz NOT NULL DEFAULT now(),
+//     shop_code    text        NOT NULL,
+//     role         text,
+//     result       text        NOT NULL,  -- 'success' | 'wrong_pin' | 'shop_not_found' | 'locked_out' | 'pin_not_configured'
+//     ip           text,
+//     city         text,
+//     region       text,
+//     country      text
+//   );
+//
+async function writeLoginAudit(shopCode, role, result, ip) {
+  // Geo-lookup from server side — no browser permission needed
+  let city = null, region = null, country = null;
+  try {
+    const geo = await fetch(`https://ipapi.co/${encodeURIComponent(ip)}/json/`, {
+      signal: AbortSignal.timeout(3000),
+    });
+    if (geo.ok) {
+      const g = await geo.json();
+      city    = g.city    || null;
+      region  = g.region  || null;
+      country = g.country_name || null;
+    }
+  } catch {
+    // Location is best-effort — never block login on geo failure
+  }
+
+  // Fire-and-forget — don't await so it never slows down the login response
+  fetch(sb("login_audit"), {
+    method:  "POST",
+    headers: { ...headers, "Prefer": "return=minimal" },
+    body: JSON.stringify({
+      timestamp: new Date().toISOString(),
+      shop_code: shopCode,
+      role:      role   || null,
+      result,
+      ip,
+      city,
+      region,
+      country,
+    }),
+  }).catch(() => {}); // silent fail — audit must never break login
+}
+
 // ── Vercel handler ─────────────────────────────────────────
 export default async function handler(req, res) {
   if (req.method !== "POST") {
@@ -233,12 +282,14 @@ export default async function handler(req, res) {
       if (await isShopLockedOut(ip)) {
         const row       = await getRateLimit(`shop::${ip}`);
         const remaining = Math.ceil((SHOP_LOCKOUT_MS - (Date.now() - row.last_attempt)) / 1000);
+        writeLoginAudit(shopCode, role, "locked_out", ip);
         return res.status(429).json({ error: `Too many failed attempts. Try again in ${remaining}s.` });
       }
 
       const pinLockRow = await isPinLockedOut(shopCode);
       if (pinLockRow) {
         const remaining = Math.ceil((PIN_LOCKOUT_MS - (Date.now() - pinLockRow.last_attempt)) / 1000);
+        writeLoginAudit(shopCode, role, "locked_out", ip);
         return res.status(429).json({ error: `Too many attempts. Try again in ${remaining}s.` });
       }
 
@@ -247,6 +298,7 @@ export default async function handler(req, res) {
 
       if (!rows || rows.length === 0) {
         await recordShopAttempt(ip);
+        writeLoginAudit(shopCode, role, "shop_not_found", ip);
         return res.status(404).json({ error: "Shop not found" });
       }
 
@@ -257,6 +309,7 @@ export default async function handler(req, res) {
       const correctHash = role === "admin" ? settings.adminPinHash : settings.staffPinHash;
 
       if (!correctHash) {
+        writeLoginAudit(shopCode, role, "pin_not_configured", ip);
         return res.status(401).json({ error: "PIN not configured. Please set up your PIN in Settings." });
       }
 
@@ -264,12 +317,14 @@ export default async function handler(req, res) {
         await recordPinAttempt(shopCode);
         const pinRow    = await getRateLimit(`pin::${shopCode}`);
         const remaining = MAX_PIN_ATTEMPTS - (pinRow?.count || 1);
+        writeLoginAudit(shopCode, role, "wrong_pin", ip);
         return res.status(401).json({
           error: `Wrong PIN. ${remaining} attempt${remaining !== 1 ? "s" : ""} left.`,
         });
       }
 
       await resetPinAttempts(shopCode);
+      writeLoginAudit(shopCode, role, "success", ip);
 
       // Issue signed session token — client stores and sends on every mutation
       const sessionToken = await issueToken(shopCode, role);
