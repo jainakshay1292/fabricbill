@@ -45,14 +45,12 @@ export default function App() {
   const [shopCode, setShopCode] = useState(() => {
     try { return localStorage.getItem("fabricbill_shopcode") || null; } catch { return null; }
   });
-  const [role, setRole] = useState(() => {
-    try {
-      const s = localStorage.getItem("fabricbill_session");
-      if (!s) return null;
-      const { role, expiry } = JSON.parse(s);
-      return Date.now() < expiry ? role : null;
-    } catch { return null; }
-  });
+
+  // Role is NOT restored from localStorage on refresh.
+  // The session token lives in memory only — once the page is refreshed
+  // the token is gone, so the user must re-enter their PIN to get a
+  // fresh token. This prevents "Unauthorised: Missing session token" errors.
+  const [role, setRole] = useState(null);
 
   // ── UI state ──────────────────────────────────
   const [tab, setTab] = useState("billing");
@@ -92,17 +90,13 @@ export default function App() {
   const handleLogin = (r, token) => {
     setRole(r);
     setTab("billing");
-    // Store signed token in memory so api.js can attach it to mutations
+    // Token lives in memory only — never written to localStorage
     if (token) setSessionToken(token);
-    try {
-      localStorage.setItem("fabricbill_session", JSON.stringify({ role: r, expiry: Date.now() + 24 * 3600000 }));
-    } catch {}
   };
 
   const handleLogout = () => {
     setRole(null);
     clearSessionToken();
-    try { localStorage.removeItem("fabricbill_session"); } catch {}
   };
 
   const handleEnterShop = (code) => {
