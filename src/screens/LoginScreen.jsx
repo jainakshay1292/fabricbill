@@ -29,8 +29,8 @@ export function LoginScreen({ onLogin, shopCode, onChangeShop }) {
     setLoading(true);
     setErr("");
     try {
-      await loginWithPin(shopCode, role, pin);
-      onLogin(role);
+      const { token } = await loginWithPin(shopCode, role, pin);
+      onLogin(role, token);
     } catch (e) {
       setErr(e.message || "Wrong PIN");
       setPin("");
