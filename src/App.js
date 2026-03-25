@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { setSessionToken, clearSessionToken } from "./lib/api";
 
 // Styles
 import { injectGlobalStyles } from "./styles";
@@ -88,9 +89,11 @@ export default function App() {
   const isAdmin = role === "admin";
 
   // ── Auth helpers ──────────────────────────────
-  const handleLogin = (r) => {
+  const handleLogin = (r, token) => {
     setRole(r);
     setTab("billing");
+    // Store signed token in memory so api.js can attach it to mutations
+    if (token) setSessionToken(token);
     try {
       localStorage.setItem("fabricbill_session", JSON.stringify({ role: r, expiry: Date.now() + 24 * 3600000 }));
     } catch {}
@@ -98,6 +101,7 @@ export default function App() {
 
   const handleLogout = () => {
     setRole(null);
+    clearSessionToken();
     try { localStorage.removeItem("fabricbill_session"); } catch {}
   };
 
