@@ -21,7 +21,6 @@ import { CustomersTab } from "./tabs/CustomersTab";
 import { HistoryTab }   from "./tabs/HistoryTab";
 import { ProductsTab }  from "./tabs/ProductsTab";
 import { SettingsTab }    from "./tabs/SettingsTab";
-import { AttendanceTab }  from "./tabs/AttendanceTab";
 
 // Modals — InvoiceView is default export, rest are named exports
 import InvoiceView           from "./components/InvoiceView";
