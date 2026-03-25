@@ -1,5 +1,3 @@
-
-
 // ─────────────────────────────────────────────
 // screens/ShopCodeScreen.jsx
 // First screen the user sees. Asks for a shop
@@ -43,7 +41,7 @@ export function ShopCodeScreen({ onEnter }) {
             setErr("");
           }}
           onKeyDown={(e) => e.key === "Enter" && check()}
-          placeholder="e.g. MEGHDOOT2024"
+          placeholder="e.g. MYSHOP2024"
           style={{ ...inp, marginBottom: 8, letterSpacing: 2, fontWeight: 700, textAlign: "center" }}
           autoFocus
         />
