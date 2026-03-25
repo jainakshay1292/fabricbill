@@ -142,9 +142,13 @@ export default function App() {
 
   // ── Credit settlement ─────────────────────────
   const handleSettleConfirm = async (amount, mode) => {
-    const voucher = await handleSettle(settleCustomer, amount, mode);
-    setSettleCustomer(null);
-    setShowVoucher(voucher);
+    try {
+      const voucher = await handleSettle(settleCustomer, amount, mode);
+      setSettleCustomer(null);
+      setShowVoucher(voucher);
+    } catch (e) {
+      alert("Settlement failed: " + e.message);
+    }
   };
 
   // ── Nav tabs (staff can't see Products / Settings) ──
