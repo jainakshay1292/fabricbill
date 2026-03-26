@@ -284,33 +284,43 @@ export default async function handler(req, res) {
 
     // ── login ───────────────────────────────────────────────
     if (action === "login") {
-      if (await isShopLockedOut(ip)) {
+      // Run all 3 checks in parallel to cut login time from ~6s to ~2s
+      const [shopLocked, pinLockRow, settingsRes] = await Promise.all([
+        isShopLockedOut(ip),
+        isPinLockedOut(shopCode),
+        fetch(sb(`settings?id=eq.${encodeURIComponent(shopCode + "::main")}`), { headers }),
+      ]);
+
+      // Check shop lockout
+      if (shopLocked) {
         const row       = await getRateLimit(`shop::${ip}`);
         const remaining = Math.ceil((SHOP_LOCKOUT_MS - (Date.now() - row.last_attempt)) / 1000);
         writeLoginAudit(shopCode, role, "locked_out", ip);
         return res.status(429).json({ error: `Too many failed attempts. Try again in ${remaining}s.` });
       }
 
-      const pinLockRow = await isPinLockedOut(shopCode);
+      // Check PIN lockout
       if (pinLockRow) {
         const remaining = Math.ceil((PIN_LOCKOUT_MS - (Date.now() - pinLockRow.last_attempt)) / 1000);
         writeLoginAudit(shopCode, role, "locked_out", ip);
         return res.status(429).json({ error: `Too many attempts. Try again in ${remaining}s.` });
       }
 
-      const r    = await fetch(sb(`settings?id=eq.${encodeURIComponent(shopCode + "::main")}`), { headers });
-      const rows = await r.json();
-
+      // Check shop exists
+      const rows = await settingsRes.json();
       if (!rows || rows.length === 0) {
         await recordShopAttempt(ip);
         writeLoginAudit(shopCode, role, "shop_not_found", ip);
         return res.status(404).json({ error: "Shop not found" });
       }
 
-      await resetShopAttempts(ip);
+      // Verify PIN — hash and compare in parallel with resetting shop attempts
+      const [hashedPin] = await Promise.all([
+        hashPin(pin),
+        resetShopAttempts(ip),
+      ]);
 
       const settings    = rows[0].data;
-      const hashedPin   = await hashPin(pin);
       const correctHash = role === "admin" ? settings.adminPinHash : settings.staffPinHash;
 
       if (!correctHash) {
@@ -319,20 +329,25 @@ export default async function handler(req, res) {
       }
 
       if (hashedPin !== correctHash) {
-        await recordPinAttempt(shopCode);
-        const pinRow    = await getRateLimit(`pin::${shopCode}`);
-        const remaining = MAX_PIN_ATTEMPTS - (pinRow?.count || 1);
+        // Record failed attempt and get updated count in parallel
+        const [, pinRow] = await Promise.all([
+          recordPinAttempt(shopCode),
+          getRateLimit(`pin::${shopCode}`),
+        ]);
+        const remaining = MAX_PIN_ATTEMPTS - ((pinRow?.count || 0) + 1);
         writeLoginAudit(shopCode, role, "wrong_pin", ip);
         return res.status(401).json({
-          error: `Wrong PIN. ${remaining} attempt${remaining !== 1 ? "s" : ""} left.`,
+          error: `Wrong PIN. ${Math.max(0, remaining)} attempt${remaining !== 1 ? "s" : ""} left.`,
         });
       }
 
-      await resetPinAttempts(shopCode);
-      writeLoginAudit(shopCode, role, "success", ip);
+      // Success — reset attempts and issue token in parallel
+      const [sessionToken] = await Promise.all([
+        issueToken(shopCode, role),
+        resetPinAttempts(shopCode),
+      ]);
 
-      // Issue signed session token — client stores and sends on every mutation
-      const sessionToken = await issueToken(shopCode, role);
+      writeLoginAudit(shopCode, role, "success", ip);
       return res.status(200).json({ success: true, role, token: sessionToken });
     }
 
