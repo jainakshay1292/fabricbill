@@ -46,7 +46,8 @@ export function useCredit({ shopCode, role, transactions, settlements, setSettle
         .filter((s) => s.customerId === custId)
         .reduce((sum, s) => sum + s.amount, 0);
 
-      return Math.max(0, totalCreditBilled - totalSettled);
+      // Allow negative — means customer has overpaid (credit in their favour)
+      return Math.round((totalCreditBilled - totalSettled) * 100) / 100;
     },
     [transactions, settlements]
   );
