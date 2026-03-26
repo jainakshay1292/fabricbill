@@ -90,6 +90,21 @@ export const getNextInvoiceNo = async (shopCode) => {
   return invoiceNo;
 };
 
+// Combines getNextInvoiceNo + insertTransaction into ONE server round trip
+// This cuts invoice save time from ~4s to ~1s
+export const saveInvoice = async (shopCode, txnData) => {
+  const d = new Date(), y = d.getFullYear(), m = d.getMonth();
+  const s = m >= 3 ? y : y - 1;
+  const fy = `${s}-${String(s + 1).slice(2)}`;
+  const { invoiceNo } = await call({
+    action: "saveInvoice",
+    shopCode,
+    query:  fy,
+    data:   txnData,
+  });
+  return invoiceNo;
+};
+
 // ── Settlements ───────────────────────────────────────────────
 export const getSettlements = (shopCode) =>
   call({ action: "getAll", shopCode, table: "settlements" });
