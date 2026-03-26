@@ -171,7 +171,7 @@ export function CustomersTab({
           const spent       = txns.filter((t) => !t.void && !t.cancelled).reduce((s, t) => s + (t.total || 0), 0);
           const outstanding = getCustomerOutstanding(c.id);
           return (
-            <div key={c.id} style={{ padding: "12px 0", borderBottom: i < filtered.length - 1 ? "1px solid #f3f4f6" : "none" }}>
+            <div key={c.id} onClick={() => onViewLedger(c)} style={{ padding: "12px 0", borderBottom: i < filtered.length - 1 ? "1px solid #f3f4f6" : "none", cursor: "pointer" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                 <div>
                   <div style={{ fontWeight: 600, fontSize: 14 }}>{c.name}</div>
@@ -185,12 +185,12 @@ export function CustomersTab({
                   <div style={{ fontSize: 11, color: "#9ca3af" }}>total billed</div>
                   <div style={{ display: "flex", gap: 4 }}>
                     {outstanding > 0 && (
-                      <button onClick={() => onSettle(c)}
+                      <button onClick={(e) => { e.stopPropagation(); onSettle(c); }}
                         style={{ padding: "4px 10px", background: "#16a34a", color: "#fff", border: "none", borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
                         💳 Settle
                       </button>
                     )}
-                    <button onClick={() => onViewLedger(c)}
+                    <button onClick={(e) => { e.stopPropagation(); onViewLedger(c); }}
                       style={{ padding: "4px 10px", background: "#eff6ff", color: "#2563eb", border: "none", borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
                       📒 Ledger
                     </button>
