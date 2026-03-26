@@ -249,7 +249,9 @@ export default async function handler(req, res) {
     "unknown"
   );
 
-  if (await isIpRateLimited(ip)) {
+  // IP rate limiting only applies to login — not to data mutations
+  // This removes ~1s Supabase read from every bill save / settlement
+  if (action === "login" && await isIpRateLimited(ip)) {
     return res.status(429).json({ error: "Too many requests. Please slow down." });
   }
 
@@ -394,6 +396,38 @@ export default async function handler(req, res) {
       const fullId = `${shopCode}::${id}`;
       await fetch(sb(`${table}?id=eq.${encodeURIComponent(fullId)}`), { method: "DELETE", headers });
       return res.status(200).json({ success: true });
+    }
+
+    // ── saveInvoice — gets next number AND inserts in one call ─
+    // Replaces two sequential calls (nextInvoice + insert) with one,
+    // cutting invoice save time from ~4s to ~1s
+    if (action === "saveInvoice") {
+      const fy    = query;
+      const seqId = `${shopCode}::${fy}`;
+
+      // Get next sequence number atomically
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/next_seq`, {
+        method:  "POST",
+        headers: { ...headers, "Prefer": "return=representation" },
+        body:    JSON.stringify({ seq_id: seqId }),
+      });
+      const nextSeq = await r.json();
+      if (!r.ok || typeof nextSeq !== "number") {
+        throw new Error("Failed to get next invoice sequence");
+      }
+
+      const invoiceNo = `${fy}/${String(nextSeq).padStart(3, "0")}`;
+
+      // Insert transaction with the generated invoice number
+      const txnWithNo = { ...data, invoiceNo };
+      const fullId    = `${shopCode}::${txnWithNo.id}`;
+      await fetch(sb("transactions"), {
+        method:  "POST",
+        headers,
+        body:    JSON.stringify({ id: fullId, data: txnWithNo }),
+      });
+
+      return res.status(200).json({ success: true, invoiceNo });
     }
 
     // ── nextInvoice — Fix 1: atomic via RPC ─────────────────
