@@ -24,30 +24,33 @@ export function useCredit({ shopCode, role, transactions, settlements, setSettle
    */
   const getCustomerOutstanding = useCallback(
     (custId) => {
-      // Sum all credit amounts on non-void invoices for this customer
-      const totalCreditBilled = transactions
-        .filter(
-          (t) =>
-            !t.void &&
-            !t.cancelled &&
-            (t.customer?.id === custId || t.customerId === custId)
-        )
-        .reduce((sum, t) => {
-          const creditAmt = t.payments
-            ? t.payments.find((p) => p.mode === "Credit")?.amount || 0
-            : t.paymentMode === "Credit"
-            ? t.total
-            : 0;
-          return sum + creditAmt;
-        }, 0);
+      const custTxns = transactions.filter(
+        (t) => !t.void && !t.cancelled &&
+          (t.customer?.id === custId || t.customerId === custId)
+      );
 
-      // Sum all settlements recorded for this customer
+      // Total invoiced (all bills)
+      const totalInvoiced = custTxns.reduce((sum, t) => sum + (t.total || 0), 0);
+
+      // Total paid at time of billing (non-credit payments only)
+      const totalPaidAtBilling = custTxns.reduce((sum, t) => {
+        const payments = t.payments?.length > 0
+          ? t.payments
+          : [{ mode: t.paymentMode || "Cash", amount: t.total || 0 }];
+        const paidNow = payments
+          .filter((p) => p.mode !== "Credit")
+          .reduce((s, p) => s + (parseFloat(p.amount) || 0), 0);
+        return sum + paidNow;
+      }, 0);
+
+      // Total settled later (credit settlements)
       const totalSettled = settlements
         .filter((s) => s.customerId === custId)
-        .reduce((sum, s) => sum + s.amount, 0);
+        .reduce((sum, s) => sum + (s.amount || 0), 0);
 
-      // Allow negative — means customer has overpaid (credit in their favour)
-      return Math.round((totalCreditBilled - totalSettled) * 100) / 100;
+      // Outstanding = invoiced − paid at billing − settled later
+      // Negative means overpaid (advance/credit in customer's favour)
+      return Math.round((totalInvoiced - totalPaidAtBilling - totalSettled) * 100) / 100;
     },
     [transactions, settlements]
   );
