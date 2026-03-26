@@ -1,4 +1,3 @@
-
 // ─────────────────────────────────────────────
 // screens/RegisterScreen.jsx
 // Shown when a shop code has no existing data.
@@ -13,7 +12,7 @@ import { registerShop, hashPin } from "../lib/api";
 import { defaultSettings } from "../constants";
 import { inp, lbl } from "../styles";
 
-export function RegisterScreen({ shopCode, onRegistered }) {
+export function RegisterScreen({ shopCode, onRegistered, onBack }) {
   const [form, setForm]     = useState({ shopName: "", adminPin: "", staffPin: "" });
   const [loading, setLoading] = useState(false);
   const set = (k, v) => setForm((p) => ({ ...p, [k]: v }));
@@ -82,6 +81,13 @@ export function RegisterScreen({ shopCode, onRegistered }) {
           style={{ width: "100%", padding: "13px 0", background: "#1e3a5f", color: "#fff", border: "none", borderRadius: 10, fontSize: 16, fontWeight: 800, cursor: "pointer" }}
         >
           {loading ? "Registering…" : "Register & Start →"}
+        </button>
+
+        <button
+          onClick={onBack}
+          style={{ width: "100%", marginTop: 10, padding: "11px 0", background: "#f3f4f6", color: "#374151", border: "none", borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: "pointer" }}
+        >
+          ← Wrong code? Go back
         </button>
       </div>
     </div>
