@@ -1,16 +1,29 @@
 // ─────────────────────────────────────────────
 // components/CustomerLedger.jsx
-// Statement-style ledger with running balance.
-// Each invoice shows full amount, then each
-// payment (cash/credit/UPI) as a receipt row,
-// with balance updating after every line.
+// Clean statement-style ledger:
+//   - Fixed column widths for perfect alignment
+//   - Debit / Credit totals at bottom
+//   - Running balance with colour coding
+//   - Negative balance = advance/overpaid (blue)
 // ─────────────────────────────────────────────
 import { fmt, fmtDate } from "../utils/format";
 
-export function CustomerLedger({ customer, transactions, settlements, getCustomerOutstanding, settings, onClose }) {
-  const f = (n) => fmt(n, settings.currency);
+// Fixed column layout — all rows use same widths
+const COL = "60px 1fr 76px 76px 80px";
 
-  // ── Collect all events chronologically ───────
+const cell = (align = "left", extra = {}) => ({
+  textAlign: align,
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+  ...extra,
+});
+
+export function CustomerLedger({ customer, transactions, settlements, getCustomerOutstanding, settings, onClose }) {
+  const f  = (n) => fmt(n, settings.currency);
+  const f2 = (n) => n === 0 ? "" : fmt(Math.abs(n), settings.currency);
+
+  // ── Build event list ──────────────────────────
   const custTxns = transactions
     .filter((t) => (t.customer?.id === customer.id || t.customerId === customer.id) && !t.void && !t.cancelled)
     .sort((a, b) => new Date(a.date) - new Date(b.date));
@@ -19,80 +32,46 @@ export function CustomerLedger({ customer, transactions, settlements, getCustome
     .filter((s) => s.customerId === customer.id)
     .sort((a, b) => new Date(a.date) - new Date(b.date));
 
-  // Build flat event list:
-  //   - Each invoice = one DEBIT row (full invoice amount)
-  //   - Each non-credit payment on an invoice = one CREDIT row (paid now)
-  //   - Each credit portion = tracked as still owed (no credit row yet)
-  //   - Each settlement = one CREDIT row
   const events = [];
 
   custTxns.forEach((t) => {
     const total    = t.total || 0;
-    const payments = t.payments && t.payments.length > 0
+    const payments = t.payments?.length > 0
       ? t.payments
       : [{ mode: t.paymentMode || "Cash", amount: total }];
-
-    const creditAmt = payments
-      .filter((p) => p.mode === "Credit")
-      .reduce((s, p) => s + (parseFloat(p.amount) || 0), 0);
-
     const paidNow = payments
       .filter((p) => p.mode !== "Credit")
       .reduce((s, p) => s + (parseFloat(p.amount) || 0), 0);
+    const paidModes = payments
+      .filter((p) => p.mode !== "Credit" && (parseFloat(p.amount) || 0) > 0)
+      .map((p) => p.mode).join("+");
 
-    // 1. Invoice raised — debit full amount
-    events.push({
-      date:    t.date,
-      type:    "invoice",
-      label:   `Invoice ${t.invoiceNo}`,
-      debit:   total,
-      credit:  0,
-      mode:    null,
-      txnId:   t.id,
-    });
-
-    // 2. Amount paid at time of billing (non-credit portion)
-    if (paidNow > 0) {
-      const paidModes = payments
-        .filter((p) => p.mode !== "Credit" && (parseFloat(p.amount) || 0) > 0)
-        .map((p) => p.mode)
-        .join(" + ");
-      events.push({
-        date:    t.date,
-        type:    "payment",
-        label:   `Payment received`,
-        debit:   0,
-        credit:  paidNow,
-        mode:    paidModes,
-        txnId:   t.id,
-      });
-    }
+    // Invoice row — debit
+    events.push({ date: t.date, type: "invoice", label: t.invoiceNo || "Invoice", debit: total, credit: 0, mode: null });
+    // Payment row — credit
+    if (paidNow > 0)
+      events.push({ date: t.date, type: "payment", label: "Paid", debit: 0, credit: paidNow, mode: paidModes });
   });
 
-  // 3. Settlements (later payments against credit)
   custSetts.forEach((s) => {
-    events.push({
-      date:   s.date,
-      type:   "settlement",
-      label:  `Payment received`,
-      debit:  0,
-      credit: s.amount,
-      mode:   s.paymentMode,
-      txnId:  s.id,
-    });
+    events.push({ date: s.date, type: "settlement", label: "Settlement", debit: 0, credit: s.amount, mode: s.paymentMode });
   });
 
-  // Sort everything chronologically
   events.sort((a, b) => new Date(a.date) - new Date(b.date));
 
-  // Compute running balance after each row
+  // Running balance
   let running = 0;
   const rows = events.map((e) => {
     running = running + e.debit - e.credit;
-    return { ...e, balance: running };
+    return { ...e, balance: Math.round(running * 100) / 100 };
   });
 
+  // Totals
+  const totalDebit  = rows.reduce((s, r) => s + r.debit,  0);
+  const totalCredit = rows.reduce((s, r) => s + r.credit, 0);
   const outstanding = getCustomerOutstanding(customer.id);
+
+  const balColor = (b) => b > 0 ? "#dc2626" : b < 0 ? "#2563eb" : "#16a34a";
 
   return (
     <div
@@ -102,120 +81,112 @@ export function CustomerLedger({ customer, transactions, settlements, getCustome
       <div style={{ background: "#fff", borderRadius: "20px 20px 0 0", width: "100%", maxWidth: 480, margin: "0 auto", maxHeight: "92vh", display: "flex", flexDirection: "column" }}>
 
         {/* ── Header ── */}
-        <div style={{ padding: "16px 16px 0" }}>
+        <div style={{ padding: "16px 16px 0", flexShrink: 0 }}>
           <div style={{ fontWeight: 800, fontSize: 17, color: "#1e3a5f" }}>📒 {customer.name}</div>
           <div style={{ fontSize: 12, color: "#9ca3af", marginBottom: 10 }}>{customer.phone || "No phone"}</div>
 
-          {/* Outstanding summary pill */}
+          {/* Balance pill */}
           <div style={{
-            background: outstanding > 0 ? "#fee2e2" : "#f0fdf4",
-            border: `1px solid ${outstanding > 0 ? "#fca5a5" : "#86efac"}`,
+            background: outstanding > 0 ? "#fee2e2" : outstanding < 0 ? "#eff6ff" : "#f0fdf4",
+            border: `1px solid ${outstanding > 0 ? "#fca5a5" : outstanding < 0 ? "#93c5fd" : "#86efac"}`,
             borderRadius: 10, padding: "10px 14px", marginBottom: 12,
             display: "flex", justifyContent: "space-between", alignItems: "center",
           }}>
-            <span style={{ fontSize: 13, fontWeight: 600, color: outstanding > 0 ? "#991b1b" : "#166534" }}>
-              {outstanding > 0 ? "⚠ Outstanding Balance" : "✅ Fully Paid"}
+            <span style={{ fontSize: 13, fontWeight: 700, color: outstanding > 0 ? "#991b1b" : outstanding < 0 ? "#1e40af" : "#166534" }}>
+              {outstanding > 0 ? "⚠ Outstanding" : outstanding < 0 ? "💰 Advance / Overpaid" : "✅ Fully Paid"}
             </span>
-            <span style={{ fontSize: 18, fontWeight: 900, color: outstanding > 0 ? "#dc2626" : "#16a34a" }}>
-              {f(outstanding)}
+            <span style={{ fontSize: 18, fontWeight: 900, color: balColor(outstanding) }}>
+              {outstanding < 0 ? "-" : ""}{f(Math.abs(outstanding))}
             </span>
           </div>
 
           {/* Column headers */}
-          <div style={{ display: "grid", gridTemplateColumns: "68px 1fr 72px 72px 80px", gap: 4, fontSize: 10, fontWeight: 700, color: "#9ca3af", padding: "6px 0", borderBottom: "2px solid #e5e7eb" }}>
-            <span>DATE</span>
-            <span>PARTICULARS</span>
-            <span style={{ textAlign: "right" }}>DEBIT</span>
-            <span style={{ textAlign: "right" }}>CREDIT</span>
-            <span style={{ textAlign: "right" }}>BALANCE</span>
+          <div style={{ display: "grid", gridTemplateColumns: COL, gap: 4, fontSize: 10, fontWeight: 700, color: "#9ca3af", padding: "6px 0", borderBottom: "2px solid #1e3a5f" }}>
+            <span style={cell()}>DATE</span>
+            <span style={cell()}>PARTICULARS</span>
+            <span style={cell("right")}>DEBIT (₹)</span>
+            <span style={cell("right")}>CREDIT (₹)</span>
+            <span style={cell("right")}>BALANCE (₹)</span>
           </div>
         </div>
 
         {/* ── Scrollable rows ── */}
         <div style={{ overflowY: "auto", flex: 1, padding: "0 16px" }}>
           {rows.length === 0 && (
-            <div style={{ color: "#9ca3af", fontSize: 13, textAlign: "center", padding: "30px 0" }}>
-              No transactions yet
-            </div>
+            <div style={{ color: "#9ca3af", fontSize: 13, textAlign: "center", padding: "30px 0" }}>No transactions yet</div>
           )}
 
           {rows.map((row, i) => {
-            const isInvoice    = row.type === "invoice";
-            const isPayment    = row.type === "payment" || row.type === "settlement";
-            const balanceColor = row.balance > 0 ? "#dc2626" : row.balance === 0 ? "#16a34a" : "#1e3a5f";
-
+            const isInv  = row.type === "invoice";
+            const isPay  = row.type === "payment" || row.type === "settlement";
             return (
               <div key={i} style={{
-                display: "grid",
-                gridTemplateColumns: "68px 1fr 72px 72px 80px",
-                gap: 4,
-                padding: "9px 0",
-                borderBottom: "1px solid #f3f4f6",
+                display: "grid", gridTemplateColumns: COL, gap: 4,
+                padding: "8px 0", borderBottom: "1px solid #f3f4f6",
                 alignItems: "center",
-                background: isInvoice ? "#f8faff" : isPayment ? "#f0fdf4" : "transparent",
+                background: isInv ? "#fafbff" : isPay ? "#f6fef9" : "transparent",
               }}>
+                <span style={{ ...cell(), fontSize: 11, color: "#9ca3af" }}>{fmtDate(row.date)}</span>
 
-                {/* Date */}
-                <span style={{ fontSize: 11, color: "#9ca3af" }}>{fmtDate(row.date)}</span>
-
-                {/* Particulars */}
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: isInvoice ? 700 : 500, color: "#1e3a5f" }}>
+                {/* Particulars + mode badge */}
+                <div style={{ overflow: "hidden" }}>
+                  <div style={{ fontSize: 12, fontWeight: isInv ? 700 : 500, color: "#1e3a5f", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                     {row.label}
                   </div>
                   {row.mode && (
-                    <span style={{
-                      fontSize: 10, fontWeight: 700,
-                      background: "#e0f2fe", color: "#0369a1",
-                      borderRadius: 4, padding: "1px 5px",
-                      display: "inline-block", marginTop: 2,
-                    }}>
+                    <span style={{ fontSize: 10, fontWeight: 700, background: "#e0f2fe", color: "#0369a1", borderRadius: 3, padding: "1px 4px" }}>
                       {row.mode}
                     </span>
                   )}
                 </div>
 
                 {/* Debit */}
-                <span style={{ textAlign: "right", fontSize: 13, fontWeight: isInvoice ? 700 : 400, color: isInvoice ? "#dc2626" : "#9ca3af" }}>
-                  {row.debit > 0 ? f(row.debit) : ""}
+                <span style={{ ...cell("right"), fontSize: 12, fontWeight: isInv ? 700 : 400, color: isInv ? "#dc2626" : "#d1d5db" }}>
+                  {f2(row.debit)}
                 </span>
 
                 {/* Credit */}
-                <span style={{ textAlign: "right", fontSize: 13, fontWeight: isPayment ? 700 : 400, color: isPayment ? "#16a34a" : "#9ca3af" }}>
-                  {row.credit > 0 ? f(row.credit) : ""}
+                <span style={{ ...cell("right"), fontSize: 12, fontWeight: isPay ? 700 : 400, color: isPay ? "#16a34a" : "#d1d5db" }}>
+                  {f2(row.credit)}
                 </span>
 
                 {/* Running balance */}
-                <span style={{ textAlign: "right", fontSize: 13, fontWeight: 800, color: balanceColor }}>
-                  {f(row.balance)}
+                <span style={{ ...cell("right"), fontSize: 12, fontWeight: 800, color: balColor(row.balance) }}>
+                  {row.balance < 0 ? "-" : ""}{f(Math.abs(row.balance))}
                 </span>
               </div>
             );
           })}
-
-          {/* Final balance row */}
-          {rows.length > 0 && (
-            <div style={{
-              display: "grid", gridTemplateColumns: "68px 1fr 72px 72px 80px", gap: 4,
-              padding: "10px 0", borderTop: "2px solid #e5e7eb", marginTop: 2,
-            }}>
-              <span />
-              <span style={{ fontSize: 13, fontWeight: 800, color: "#1e3a5f" }}>Closing Balance</span>
-              <span />
-              <span />
-              <span style={{ textAlign: "right", fontSize: 14, fontWeight: 900, color: outstanding > 0 ? "#dc2626" : "#16a34a" }}>
-                {f(outstanding)}
-              </span>
-            </div>
-          )}
         </div>
 
+        {/* ── Totals + Closing Balance ── */}
+        {rows.length > 0 && (
+          <div style={{ padding: "0 16px", flexShrink: 0, borderTop: "2px solid #1e3a5f" }}>
+            {/* Totals row */}
+            <div style={{ display: "grid", gridTemplateColumns: COL, gap: 4, padding: "8px 0", borderBottom: "1px solid #e5e7eb", background: "#f8faff" }}>
+              <span />
+              <span style={{ fontSize: 12, fontWeight: 800, color: "#1e3a5f" }}>TOTAL</span>
+              <span style={{ ...cell("right"), fontSize: 12, fontWeight: 800, color: "#dc2626" }}>{f(totalDebit)}</span>
+              <span style={{ ...cell("right"), fontSize: 12, fontWeight: 800, color: "#16a34a" }}>{f(totalCredit)}</span>
+              <span />
+            </div>
+            {/* Closing balance row */}
+            <div style={{ display: "grid", gridTemplateColumns: COL, gap: 4, padding: "8px 0" }}>
+              <span />
+              <span style={{ fontSize: 13, fontWeight: 800, color: "#1e3a5f" }}>CLOSING BALANCE</span>
+              <span />
+              <span />
+              <span style={{ ...cell("right"), fontSize: 14, fontWeight: 900, color: balColor(outstanding) }}>
+                {outstanding < 0 ? "-" : ""}{f(Math.abs(outstanding))}
+              </span>
+            </div>
+          </div>
+        )}
+
         {/* ── Close button ── */}
-        <div style={{ padding: 16 }}>
-          <button
-            onClick={onClose}
-            style={{ width: "100%", padding: "12px 0", background: "#1e3a5f", color: "#fff", border: "none", borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: "pointer" }}
-          >
+        <div style={{ padding: "8px 16px 16px", flexShrink: 0 }}>
+          <button onClick={onClose}
+            style={{ width: "100%", padding: "12px 0", background: "#1e3a5f", color: "#fff", border: "none", borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
             Close
           </button>
         </div>
