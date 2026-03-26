@@ -249,12 +249,6 @@ export default async function handler(req, res) {
     "unknown"
   );
 
-  // IP rate limiting only applies to login — not to data mutations
-  // This removes ~1s Supabase read from every bill save / settlement
-  if (action === "login" && await isIpRateLimited(ip)) {
-    return res.status(429).json({ error: "Too many requests. Please slow down." });
-  }
-
   let body;
   try {
     body = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
@@ -263,6 +257,12 @@ export default async function handler(req, res) {
   }
 
   const { action, shopCode, table, id, data, query, pin, role, token } = body;
+
+  // IP rate limiting only applies to login — not to data mutations
+  // This removes ~1s Supabase read from every bill save / settlement
+  if (action === "login" && await isIpRateLimited(ip)) {
+    return res.status(429).json({ error: "Too many requests. Please slow down." });
+  }
 
   if (!shopCode) return res.status(400).json({ error: "shopCode required" });
   if (!/^[A-Z0-9]{4,20}$/.test(shopCode))
