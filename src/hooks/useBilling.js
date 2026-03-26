@@ -13,7 +13,7 @@
 // ─────────────────────────────────────────────
 
 import { useState } from "react";
-import { insertTransaction, getNextInvoiceNo } from "../lib/api";
+import { saveInvoice } from "../lib/api";
 import { PAYMENT_MODES } from "../constants";
 import { getItemGstRate } from "../utils/gst";
 import { genId } from "../utils/misc";
@@ -120,12 +120,12 @@ export function useBilling({ shopCode, role, settings, products, customers, setT
           : { ...p, amount: parseFloat(p.amount) || 0 }
       );
 
-      const cust      = customers.find((c) => c.id === selectedCustomer) || customers[0];
-      const invoiceNo = await getNextInvoiceNo(shopCode);
+      const cust  = customers.find((c) => c.id === selectedCustomer) || customers[0];
+      const txnId = genId();
 
       const txn = {
-        id: genId(),
-        invoiceNo,
+        id: txnId,
+        invoiceNo: null, // assigned by saveInvoice
         date:          new Date().toISOString(),
         customer:      cust,
         customerName:  cust.name,
@@ -142,13 +142,16 @@ export function useBilling({ shopCode, role, settings, products, customers, setT
         createdBy:     role,
       };
 
-      // Optimistic update: add to local state first, then persist
-      setTransactions((p) => [txn, ...p]);
-      await insertTransaction(shopCode, txn);
+      // Save invoice — gets invoice number AND inserts in one round trip
+      const invoiceNo = await saveInvoice(shopCode, txn);
+      const txnFinal  = { ...txn, invoiceNo };
+
+      // Update local state with the final invoice number
+      setTransactions((p) => [txnFinal, ...p]);
 
       // Reset billing form
       resetForm(settings.defaultPaymentMode);
-      return txn; // caller (App.js) uses this to show the receipt
+      return txnFinal; // caller (App.js) uses this to show the receipt
     } catch (e) {
       alert("Save failed: " + e.message);
     } finally {
