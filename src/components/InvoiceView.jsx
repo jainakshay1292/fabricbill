@@ -140,25 +140,112 @@ export default function InvoiceView({ txn, settings, onClose }) {
 
   // ── Thermal text ──────────────────────────────────────────
   const buildThermal = () => {
-    const W = 32, line = "-".repeat(W);
-    const ctr = (s) => " ".repeat(Math.max(0, Math.floor((W - s.length) / 2))) + s;
-    const row = (l, r) => l + " ".repeat(Math.max(1, W - l.length - r.length)) + r;
-    let t = ctr(settings.shopName) + "\n" + ctr(settings.shopAddress || "") + "\nGSTIN: " + settings.gstin + "\n" + line + "\n";
-    if (isVoid) t += "*** VOID / CANCELLED ***\n" + line + "\n";
-    t += `Invoice: ${txn.invoiceNo}\nDate: ${fmtDate(txn.date)}\nBuyer: ${txn.customer?.name || txn.customerName}\n` + line + "\n";
-    txn.items.forEach((item) => {
-      t += row(item.name + " (" + item.qty + "x" + (item.price || 0).toFixed(2) + ")", ((item.price || 0) * (item.qty || 0)).toFixed(2)) + "\n";
+    const W    = 32;
+    const line = "-".repeat(W);
+    const dashes = "=".repeat(W);
+
+    // Centre a string within W chars
+    const ctr = (s) => {
+      if (!s) return "";
+      s = s.slice(0, W);
+      return " ".repeat(Math.max(0, Math.floor((W - s.length) / 2))) + s;
+    };
+
+    // Right-align r, left-align l, pad middle with spaces
+    const row = (l, r) => {
+      l = String(l); r = String(r);
+      // Truncate label if needed to always fit amount on same line
+      const maxL = W - r.length - 1;
+      if (l.length > maxL) l = l.slice(0, maxL - 1) + ".";
+      return l + " ".repeat(Math.max(1, W - l.length - r.length)) + r;
+    };
+
+    let t = "";
+
+    // ── Header ──
+    t += ctr(settings.shopName) + "\n";
+    if (settings.shopTagline)  t += ctr(settings.shopTagline) + "\n";
+    if (settings.shopAddress)  t += ctr(settings.shopAddress) + "\n";
+    if (settings.shopPhone)    t += ctr("Ph: " + settings.shopPhone) + "\n";
+    if (settings.gstin)        t += ctr("GSTIN: " + settings.gstin) + "\n";
+    t += line + "\n";
+
+    // ── Void banner ──
+    if (isVoid) t += ctr("** VOID / CANCELLED **") + "\n" + line + "\n";
+
+    // ── Invoice meta ──
+    t += row("Invoice:", txn.invoiceNo) + "\n";
+    t += row("Date:", fmtDate(txn.date)) + "\n";
+    t += row("Buyer:", (txn.customer?.name || txn.customerName || "").slice(0, 18)) + "\n";
+    const phone = txn.customer?.phone || txn.customerPhone;
+    if (phone) t += row("Ph:", phone) + "\n";
+    t += line + "\n";
+
+    // ── Items — 2-line format so long names never overflow ──
+    // Line 1: Sl. Item name (truncated to 30 chars)
+    // Line 2: (indented) qty x rate           amount
+    txn.items.forEach((item, idx) => {
+      const name    = (item.name || "").slice(0, 30);
+      const qty     = parseFloat(item.qty)   || 0;
+      const price   = parseFloat(item.price) || 0;
+      const amount  = (qty * price).toFixed(2);
+      const qtyRate = qty + " x " + price.toFixed(2);
+      // Line 1: index + name
+      t += (idx + 1) + ". " + name + "\n";
+      // Line 2: right-align amount, left-align qty×rate indented
+      t += row("   " + qtyRate, amount) + "\n";
     });
     t += line + "\n";
+
+    // ── Totals ──
     const displayDiscount = Math.round((txn.subtotal - txn.taxable) * 100) / 100;
-    if (displayDiscount > 0.01) t += row("Discount", "-" + fmt(displayDiscount, "")) + "\n";
-    t += row("Taxable", fmt(txn.taxable, "")) + "\n";
+    if (displayDiscount > 0.01) t += row("Discount", "-" + displayDiscount.toFixed(2)) + "\n";
+    t += row("Taxable Value", txn.taxable.toFixed(2)) + "\n";
     gstRows.forEach((r) => {
-      t += row("CGST " + r.half + "%", fmt(r.cgst, "")) + "\n" + row("SGST " + r.half + "%", fmt(r.sgst, "")) + "\n";
+      t += row("CGST @ " + r.half + "%", r.cgst.toFixed(2)) + "\n";
+      t += row("SGST @ " + r.half + "%", r.sgst.toFixed(2)) + "\n";
     });
-    t += line + "\n" + row("NET", fmt(total, "")) + "\n" + line + "\nPayment: " + paymentLabel + "\n";
-    if (creditAmt > 0) t += "AMOUNT DUE: " + fmt(creditAmt, "") + "\n";
-    t += "\nAmt: " + amtWords + "\n" + line + "\n" + ctr(settings.footerNote || "") + "\n" + ctr(settings.signoff || "") + "\n\n\n";
+    if (txn.roundOff && txn.roundOff !== 0) {
+      t += row("Round Off", (txn.roundOff > 0 ? "+" : "") + txn.roundOff.toFixed(2)) + "\n";
+    }
+    t += dashes + "\n";
+    t += row("NET AMOUNT", fmt(total, "")) + "\n";
+    t += dashes + "\n";
+
+    // ── Payment ──
+    if (hasSplit) {
+      t += "Payment:\n";
+      txn.payments.filter((p) => p.amount > 0).forEach((p) => {
+        t += row("  " + p.mode, fmt(p.amount, "")) + "\n";
+      });
+    } else {
+      t += row("Payment:", paymentLabel) + "\n";
+    }
+    if (creditAmt > 0) t += row("** AMOUNT DUE **", fmt(creditAmt, "")) + "\n";
+
+    // ── Amount in words ──
+    t += line + "\n";
+    // Wrap words at 32 chars
+    const words = "Amt: " + amtWords;
+    const wrapWords = (str, w) => {
+      const out = [];
+      while (str.length > w) {
+        let cut = str.lastIndexOf(" ", w);
+        if (cut <= 0) cut = w;
+        out.push(str.slice(0, cut));
+        str = str.slice(cut + 1);
+      }
+      out.push(str);
+      return out.join("\n");
+    };
+    t += wrapWords(words, W) + "\n";
+
+    // ── Footer ──
+    t += line + "\n";
+    if (settings.footerNote) t += ctr(settings.footerNote) + "\n";
+    if (settings.signoff)    t += ctr(settings.signoff)    + "\n";
+    t += "\n\n\n";
+
     return t;
   };
 
