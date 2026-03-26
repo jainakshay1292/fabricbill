@@ -179,6 +179,9 @@ export function CustomersTab({
                   {outstanding > 0 && (
                     <div style={{ fontSize: 12, color: "#dc2626", fontWeight: 700, marginTop: 2 }}>⚠ Outstanding: {f(outstanding)}</div>
                   )}
+                  {outstanding < 0 && (
+                    <div style={{ fontSize: 12, color: "#2563eb", fontWeight: 700, marginTop: 2 }}>💰 Advance: {f(Math.abs(outstanding))}</div>
+                  )}
                 </div>
                 <div style={{ textAlign: "right", display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
                   <div style={{ fontWeight: 700, color: "#1e3a5f", fontSize: 14 }}>{f(spent)}</div>
@@ -189,6 +192,11 @@ export function CustomersTab({
                         style={{ padding: "4px 10px", background: "#16a34a", color: "#fff", border: "none", borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
                         💳 Settle
                       </button>
+                    )}
+                    {outstanding < 0 && (
+                      <span style={{ padding: "4px 10px", background: "#eff6ff", color: "#2563eb", borderRadius: 6, fontSize: 11, fontWeight: 700 }}>
+                        💰 Advance
+                      </span>
                     )}
                     <button onClick={(e) => { e.stopPropagation(); onViewLedger(c); }}
                       style={{ padding: "4px 10px", background: "#eff6ff", color: "#2563eb", border: "none", borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
