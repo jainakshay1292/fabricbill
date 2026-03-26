@@ -216,6 +216,7 @@ export default function App() {
       <RegisterScreen
         shopCode={shopCode}
         onRegistered={() => { setIsNewShop(false); }}
+        onBack={handleChangeShop}
       />
     );
 
