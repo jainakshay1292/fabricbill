@@ -12,7 +12,6 @@ import { fmt, fmtDate, numToWords } from "../utils/format";
 import { buildGstRows } from "../utils/gst";
 import { BDR, tds } from "../styles";
 import { uploadPDF, sendWhatsApp } from "../lib/api";
-import { printViaBluetooth } from "../utils/bluetoothPrint";
 
 export default function InvoiceView({ txn, settings, onClose }) {
   const [showThermal, setShowThermal] = useState(false);
@@ -249,50 +248,61 @@ export default function InvoiceView({ txn, settings, onClose }) {
     return t;
   };
 
-  const doThermalPrint = async () => {
+  const doThermalPrint = () => {
     const thermalText = buildThermal();
 
-    // Try Bluetooth first (mobile), fallback to window.print
-    if (navigator.bluetooth) {
-      try {
-        await printViaBluetooth(thermalText);
-        alert("✅ Printed via Bluetooth!");
-        return;
-      } catch (e) {
-        const fallback = confirm(
-          "Bluetooth print failed: " + e.message + "\n\nOpen browser print dialog instead?"
-        );
-        if (!fallback) return;
-      }
-    }
-
-    // Fallback: browser print dialog (works with RawBT / USB printers)
+    // i9100 and similar Android POS devices have a built-in printer.
+    // window.print() routes directly to it via the device print service.
+    // No Bluetooth needed — the browser handles it natively.
     const win = window.open("", "_blank");
     if (!win) {
       alert("Popup blocked. Please allow popups for this site.");
       return;
     }
-    win.document.write(`<html><head><title>Thermal Print</title>
+    win.document.write(`<html><head><title>Receipt ${txn.invoiceNo}</title>
       <style>
-        @page { margin: 0; size: 80mm auto; }
+        @page {
+          margin: 0;
+          size: 58mm auto;
+        }
+        * { box-sizing: border-box; }
         body {
-          font-family: monospace;
-          font-size: 12px;
-          margin: 2mm;
-          padding: 0;
+          font-family: 'Courier New', Courier, monospace;
+          font-size: 11px;
+          line-height: 1.4;
+          margin: 0;
+          padding: 2mm;
+          width: 54mm;
+          color: #000;
+          background: #fff;
           white-space: pre-wrap;
-          word-wrap: break-word;
-          width: 76mm;
+          word-break: break-word;
         }
         @media print {
           .no-print { display: none !important; }
+          body { padding: 1mm; }
         }
       </style>
-    </head><body>${thermalText.replace(/\n/g, "<br/>")}<div class="no-print" style="margin-top:20px;text-align:center;">
-      <button onclick="window.print();" style="padding:10px 24px;font-size:16px;font-weight:bold;cursor:pointer;background:#16a34a;color:#fff;border:none;border-radius:8px;">🖨️ Print Now</button>
-      <button onclick="window.close();" style="padding:10px 24px;font-size:16px;cursor:pointer;background:#e5e7eb;border:none;border-radius:8px;margin-left:8px;">Close</button>
+    </head>
+    <body>${thermalText.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/\n/g,"<br/>")}
+    <div class="no-print" style="margin-top:16px;text-align:center;">
+      <button onclick="window.print();"
+        style="padding:10px 24px;font-size:15px;font-weight:bold;cursor:pointer;background:#16a34a;color:#fff;border:none;border-radius:8px;">
+        Print
+      </button>
+      <button onclick="window.close();"
+        style="padding:10px 24px;font-size:15px;cursor:pointer;background:#e5e7eb;color:#111;border:none;border-radius:8px;margin-left:8px;">
+        Close
+      </button>
     </div>
-    <script>window.onload = function() { window.print(); };</script>
+    <script>
+      // Auto-print on i9100 and other POS devices
+      window.onload = function() {
+        window.print();
+        // Close window after print dialog is dismissed on POS devices
+        window.onfocus = function() { window.close(); };
+      };
+    </script>
     </body></html>`);
     win.document.close();
   };
