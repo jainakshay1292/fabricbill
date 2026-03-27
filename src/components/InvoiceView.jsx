@@ -139,77 +139,107 @@ export default function InvoiceView({ txn, settings, onClose }) {
 
   // ── Thermal text ──────────────────────────────────────────
   const buildThermal = () => {
+    // W = 32 chars for 58mm paper
+    // Adjust down to 24 if text still wraps on your printer
     const W    = 32;
     const line = "-".repeat(W);
-    const dashes = "=".repeat(W);
+    const dline = "=".repeat(W);
 
-    // Centre a string within W chars
-    const ctr = (s) => {
+    // Wrap a long string at word boundaries
+    const wrap = (s, w) => {
       if (!s) return "";
-      s = s.slice(0, W);
-      return " ".repeat(Math.max(0, Math.floor((W - s.length) / 2))) + s;
+      const words = s.split(" ");
+      const lines = [];
+      let cur = "";
+      words.forEach((word) => {
+        if ((cur + " " + word).trim().length <= w) {
+          cur = (cur + " " + word).trim();
+        } else {
+          if (cur) lines.push(cur);
+          cur = word.slice(0, w);
+        }
+      });
+      if (cur) lines.push(cur);
+      return lines.join("\n");
     };
 
-    // Right-align r, left-align l, pad middle with spaces
+    // Centre within W
+    const ctr = (s) => {
+      if (!s) return "";
+      // wrap first then centre each line
+      return wrap(s, W).split("\n").map((l) =>
+        " ".repeat(Math.max(0, Math.floor((W - l.length) / 2))) + l
+      ).join("\n");
+    };
+
+    // Left label, right value — both fit on one line
     const row = (l, r) => {
       l = String(l); r = String(r);
-      // Truncate label if needed to always fit amount on same line
       const maxL = W - r.length - 1;
-      if (l.length > maxL) l = l.slice(0, maxL - 1) + ".";
+      if (l.length > maxL) l = l.slice(0, maxL);
       return l + " ".repeat(Math.max(1, W - l.length - r.length)) + r;
+    };
+
+    // Short date: "27-Mar-26" instead of "27 Mar 2026"
+    const shortDate = (d) => {
+      try {
+        const dt = new Date(d);
+        const day = String(dt.getDate()).padStart(2, "0");
+        const mon = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][dt.getMonth()];
+        const yr  = String(dt.getFullYear()).slice(2);
+        return day + "-" + mon + "-" + yr;
+      } catch { return ""; }
     };
 
     let t = "";
 
     // ── Header ──
     t += ctr(settings.shopName) + "\n";
-    if (settings.shopTagline)  t += ctr(settings.shopTagline) + "\n";
-    if (settings.shopAddress)  t += ctr(settings.shopAddress) + "\n";
-    if (settings.shopPhone)    t += ctr("Ph: " + settings.shopPhone) + "\n";
-    if (settings.gstin)        t += ctr("GSTIN: " + settings.gstin) + "\n";
+    if (settings.shopTagline) t += ctr(settings.shopTagline) + "\n";
+    if (settings.shopAddress)  t += wrap(settings.shopAddress, W) + "\n";
+    if (settings.shopPhone)    t += "Ph: " + settings.shopPhone + "\n";
+    if (settings.gstin)        t += "GSTIN: " + settings.gstin + "\n";
     t += line + "\n";
 
     // ── Void banner ──
-    if (isVoid) t += ctr("** VOID / CANCELLED **") + "\n" + line + "\n";
+    if (isVoid) t += ctr("** VOID **") + "\n" + line + "\n";
 
-    // ── Invoice meta ──
+    // ── Invoice meta — keep each value short ──
     t += row("Invoice:", txn.invoiceNo) + "\n";
-    t += row("Date:", fmtDate(txn.date)) + "\n";
-    t += row("Buyer:", (txn.customer?.name || txn.customerName || "").slice(0, 18)) + "\n";
+    t += row("Date:", shortDate(txn.date)) + "\n";
+    const buyerName = (txn.customer?.name || txn.customerName || "").slice(0, W - 7);
+    t += row("Buyer:", buyerName) + "\n";
     const phone = txn.customer?.phone || txn.customerPhone;
     if (phone) t += row("Ph:", phone) + "\n";
     t += line + "\n";
 
-    // ── Items — 2-line format so long names never overflow ──
-    // Line 1: Sl. Item name (truncated to 30 chars)
-    // Line 2: (indented) qty x rate           amount
+    // ── Items ──
     txn.items.forEach((item, idx) => {
-      const name    = (item.name || "").slice(0, 30);
-      const qty     = parseFloat(item.qty)   || 0;
-      const price   = parseFloat(item.price) || 0;
-      const amount  = (qty * price).toFixed(2);
-      const qtyRate = qty + " x " + price.toFixed(2);
-      // Line 1: index + name
+      const name   = (item.name || "").slice(0, W - 3);
+      const qty    = parseFloat(item.qty)   || 0;
+      const price  = parseFloat(item.price) || 0;
+      const amount = (qty * price).toFixed(2);
+      // Line 1: number + name
       t += (idx + 1) + ". " + name + "\n";
-      // Line 2: right-align amount, left-align qty×rate indented
-      t += row("   " + qtyRate, amount) + "\n";
+      // Line 2: qty x rate (right-aligned amount)
+      t += row("   " + qty + " x " + price.toFixed(2), amount) + "\n";
     });
     t += line + "\n";
 
     // ── Totals ──
     const displayDiscount = Math.round((txn.subtotal - txn.taxable) * 100) / 100;
     if (displayDiscount > 0.01) t += row("Discount", "-" + displayDiscount.toFixed(2)) + "\n";
-    t += row("Taxable Value", txn.taxable.toFixed(2)) + "\n";
+    t += row("Taxable", txn.taxable.toFixed(2)) + "\n";
     gstRows.forEach((r) => {
-      t += row("CGST @ " + r.half + "%", r.cgst.toFixed(2)) + "\n";
-      t += row("SGST @ " + r.half + "%", r.sgst.toFixed(2)) + "\n";
+      t += row("CGST@" + r.half + "%", r.cgst.toFixed(2)) + "\n";
+      t += row("SGST@" + r.half + "%", r.sgst.toFixed(2)) + "\n";
     });
     if (txn.roundOff && txn.roundOff !== 0) {
       t += row("Round Off", (txn.roundOff > 0 ? "+" : "") + txn.roundOff.toFixed(2)) + "\n";
     }
-    t += dashes + "\n";
+    t += dline + "\n";
     t += row("NET AMOUNT", fmt(total, "")) + "\n";
-    t += dashes + "\n";
+    t += dline + "\n";
 
     // ── Payment ──
     if (hasSplit) {
@@ -220,13 +250,11 @@ export default function InvoiceView({ txn, settings, onClose }) {
     } else {
       t += row("Payment:", paymentLabel) + "\n";
     }
-    if (creditAmt > 0) t += row("** AMOUNT DUE **", fmt(creditAmt, "")) + "\n";
-
-    // ── Amount in words ──
+    if (creditAmt > 0) t += row("AMT DUE:", fmt(creditAmt, "")) + "\n";
     t += line + "\n";
-    // Wrap words at 32 chars
-    const words = "Amt: " + amtWords;
-    const wrapWords = (str, w) => {
+
+    // ── Amount in words — word-wrapped ──
+    const wrapLine = (str, w) => {
       const out = [];
       while (str.length > w) {
         let cut = str.lastIndexOf(" ", w);
@@ -234,15 +262,15 @@ export default function InvoiceView({ txn, settings, onClose }) {
         out.push(str.slice(0, cut));
         str = str.slice(cut + 1);
       }
-      out.push(str);
+      if (str) out.push(str);
       return out.join("\n");
     };
-    t += wrapWords(words, W) + "\n";
-
-    // ── Footer ──
+    t += wrapLine("Amt: " + amtWords, W) + "\n";
     t += line + "\n";
-    if (settings.footerNote) t += ctr(settings.footerNote) + "\n";
-    if (settings.signoff)    t += ctr(settings.signoff)    + "\n";
+
+    // ── Footer — word-wrapped ──
+    if (settings.footerNote) t += wrap(settings.footerNote, W) + "\n";
+    if (settings.signoff)    t += ctr(settings.signoff) + "\n";
     t += "\n\n\n";
 
     return t;
@@ -251,9 +279,15 @@ export default function InvoiceView({ txn, settings, onClose }) {
   const doThermalPrint = () => {
     const thermalText = buildThermal();
 
-    // i9100 and similar Android POS devices have a built-in printer.
-    // window.print() routes directly to it via the device print service.
-    // No Bluetooth needed — the browser handles it natively.
+    // If running inside the FabricBill APK on TVS i9100,
+    // use the native printer bridge directly — no dialog, instant print.
+    if (window.printToTVS && window.isTVSPrinterAvailable && window.isTVSPrinterAvailable()) {
+      const success = window.printToTVS(thermalText);
+      if (success) return;
+      // If bridge failed, fall through to browser print
+    }
+
+    // Browser fallback (Chrome on i9100 or any other browser)
     const win = window.open("", "_blank");
     if (!win) {
       alert("Popup blocked. Please allow popups for this site.");
