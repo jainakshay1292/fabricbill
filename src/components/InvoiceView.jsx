@@ -302,19 +302,20 @@ export default function InvoiceView({ txn, settings, onClose }) {
         * { box-sizing: border-box; }
         body {
           font-family: 'Courier New', Courier, monospace;
-          font-size: 11px;
-          line-height: 1.4;
+          font-size: 9px;
+          line-height: 1.35;
           margin: 0;
-          padding: 2mm;
-          width: 54mm;
+          padding: 1mm 2mm;
+          width: 56mm;
           color: #000;
           background: #fff;
-          white-space: pre-wrap;
-          word-break: break-word;
+          white-space: pre;
+          overflow-wrap: normal;
+          word-break: normal;
         }
         @media print {
           .no-print { display: none !important; }
-          body { padding: 1mm; }
+          body { padding: 0 1mm; }
         }
       </style>
     </head>
