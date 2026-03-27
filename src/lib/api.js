@@ -120,10 +120,9 @@ export const getNextVoucherNo = async (shopCode) => {
   return voucherNo;
 };
 
-// ── Shop registration ─────────────────────────────────────────
+// ── Shop registration — single public call, no token needed ──
 export const registerShop = async (shopCode, settings) => {
-  await saveSettings(shopCode, settings);
-  await upsertCustomer(shopCode, { id: "c1", name: "Walk-in Customer", phone: "" });
+  await call({ action: "register", shopCode, data: settings });
 };
 
 // ── PIN hashing (client-side, for registration only) ──────────
