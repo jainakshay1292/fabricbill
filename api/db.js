@@ -32,7 +32,7 @@ const ALLOWED_TABLES = new Set([
 ]);
 
 // Read-only actions that work before a session token exists
-const PUBLIC_ACTIONS = new Set(["login", "get", "getAll"]);
+const PUBLIC_ACTIONS = new Set(["login", "get", "getAll", "register"]);
 
 const headers = {
   "Content-Type":  "application/json",
@@ -479,6 +479,37 @@ export default async function handler(req, res) {
       const within24h = (Date.now() - new Date(txn.date).getTime()) < 24 * 60 * 60 * 1000;
       if (!within24h) return res.status(403).json({ error: "Invoice can only be edited within 24 hours of creation." });
       return res.status(200).json({ allowed: true });
+    }
+
+    // ── register — public action, no token needed ──────────
+    // Creates shop settings + walk-in customer in one call.
+    // Only works if the shop does NOT already exist.
+    if (action === "register") {
+      const settingsId = `${shopCode}::main`;
+
+      // Check shop doesn't already exist
+      const check = await fetch(sb(`settings?id=eq.${encodeURIComponent(settingsId)}`), { headers });
+      const existing = await check.json();
+      if (existing && existing.length > 0) {
+        return res.status(409).json({ error: "Shop code already registered. Please choose a different code." });
+      }
+
+      // Save settings
+      await fetch(sb("settings"), {
+        method:  "POST",
+        headers: { ...headers, "Prefer": "resolution=merge-duplicates,return=representation" },
+        body:    JSON.stringify({ id: settingsId, data }),
+      });
+
+      // Create walk-in customer
+      const custId = `${shopCode}::c1`;
+      await fetch(sb("customers"), {
+        method:  "POST",
+        headers: { ...headers, "Prefer": "resolution=merge-duplicates,return=representation" },
+        body:    JSON.stringify({ id: custId, data: { id: "c1", name: "Walk-in Customer", phone: "" } }),
+      });
+
+      return res.status(200).json({ success: true });
     }
 
     return res.status(400).json({ error: "Unknown action" });
