@@ -54,19 +54,20 @@ export function buildGstRows(items, taxable, subtotal) {
   });
 
   return Object.entries(groups)
-    .filter(([rate]) => parseFloat(rate) !== 0) // skip 0% GST items
+    .filter(([rate]) => parseFloat(rate) !== 0)
     .map(([rate, amt]) => {
-      const share = subtotal > 0 ? amt / subtotal : 0;
+      const share      = subtotal > 0 ? amt / subtotal : 0;
+      const half       = (parseFloat(rate) / 2).toFixed(1);
       const taxableAmt = Math.round(taxable * share * 100) / 100;
-      const gstAmt =
-        Math.round((taxableAmt * parseFloat(rate)) / 100 * 100) / 100;
-      const half = (parseFloat(rate) / 2).toFixed(1);
-      return {
-        rate,
-        half,
-        taxableAmt,
-        cgst: Math.round((gstAmt / 2) * 100) / 100,
-        sgst: Math.round((gstAmt / 2) * 100) / 100,
-      };
+      const gstRaw     = taxableAmt * parseFloat(rate) / 100;
+
+      // parseFloat(.toFixed(2)) gives correct standard rounding for both:
+      //   53.33325 → 53.33  (not 53.34)
+      //   65.47625 → 65.48  (not 65.47)
+      // Both CGST and SGST always show the same value
+      const cgst = parseFloat((gstRaw / 2).toFixed(2));
+      const sgst = cgst;
+
+      return { rate, half, taxableAmt, cgst, sgst };
     });
 }
