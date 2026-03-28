@@ -126,25 +126,25 @@ export function BillingTab({
                   {products.map((pr) => <option key={pr.id || pr.name} value={pr.name} />)}
                 </datalist>
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "3fr 2fr", gap: 10 }}>
-                {/* Price — full width input, large and easy to tap */}
-                <div>
+              <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
+                {/* Price — takes most of the space */}
+                <div style={{ flex: "0 0 48%", minWidth: 0 }}>
                   <div style={{ ...lbl, fontSize: 11, marginBottom: 4 }}>Price (₹)</div>
                   <input type="number" value={item.price} inputMode="decimal" step="any"
                     onChange={(e) => updateLine(item.uid, "price", e.target.value)}
                     style={{ ...inp, padding: "12px 10px", fontSize: 16, fontWeight: 600, textAlign: "right" }} />
                 </div>
-                {/* Qty — larger input with +/- buttons */}
-                <div>
+                {/* Qty — fixed width enough for buttons + input */}
+                <div style={{ flex: "0 0 48%", minWidth: 0 }}>
                   <div style={{ ...lbl, fontSize: 11, marginBottom: 4 }}>Qty {isReturn ? "(Return)" : ""}</div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 3 }}>
                     <button onClick={() => updateLine(item.uid, "qty", parseFloat((q - 1).toFixed(2)))}
-                      style={{ width: 38, height: 46, border: "1px solid #d1d5db", background: "#fff", borderRadius: 6, fontSize: 22, cursor: "pointer", fontWeight: 700, color: "#1e3a5f", flexShrink: 0 }}>−</button>
+                      style={{ width: 36, height: 46, flexShrink: 0, border: "1px solid #d1d5db", background: "#fff", borderRadius: 6, fontSize: 20, cursor: "pointer", fontWeight: 700, color: "#1e3a5f" }}>−</button>
                     <input type="number" value={item.qty} inputMode="decimal" step="any"
                       onChange={(e) => updateLine(item.uid, "qty", e.target.value)}
-                      style={{ flex: 1, minWidth: 0, textAlign: "center", border: "1px solid #d1d5db", borderRadius: 6, padding: "12px 4px", fontSize: 16, fontWeight: 600 }} />
+                      style={{ flex: 1, minWidth: 0, textAlign: "center", border: "1px solid #d1d5db", borderRadius: 6, padding: "12px 2px", fontSize: 15, fontWeight: 600 }} />
                     <button onClick={() => updateLine(item.uid, "qty", parseFloat((q + 1).toFixed(2)))}
-                      style={{ width: 38, height: 46, border: "1px solid #d1d5db", background: "#fff", borderRadius: 6, fontSize: 22, cursor: "pointer", fontWeight: 700, color: "#1e3a5f", flexShrink: 0 }}>+</button>
+                      style={{ width: 36, height: 46, flexShrink: 0, border: "1px solid #d1d5db", background: "#fff", borderRadius: 6, fontSize: 20, cursor: "pointer", fontWeight: 700, color: "#1e3a5f" }}>+</button>
                   </div>
                 </div>
               </div>
