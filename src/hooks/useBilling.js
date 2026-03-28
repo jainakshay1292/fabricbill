@@ -41,12 +41,14 @@ export function useBilling({ shopCode, role, settings, products, customers, setT
   const availableModesFor = (cur) => PAYMENT_MODES.filter((m) => m === cur || !usedModes.includes(m));
   const canAddPaymentRow  = payments.length < PAYMENT_MODES.length;
 
-  const addPaymentRow = (currentNetAmount, currentTotalPayments) => {
+  const addPaymentRow = (currentNetAmount, currentPayments) => {
     const remaining = PAYMENT_MODES.filter((m) => !usedModes.includes(m));
     if (!remaining.length) return;
-    // Auto-fill the remaining unpaid amount so user doesn't have to calculate
-    const alreadyEntered = currentTotalPayments || 0;
-    const leftover = Math.max(0, (currentNetAmount || 0) - alreadyEntered);
+    const net = currentNetAmount || 0;
+    // Sum what's already entered across all current payment rows
+    const alreadyEntered = (currentPayments || [])
+      .reduce((s, p) => s + (parseFloat(p.amount) || 0), 0);
+    const leftover = Math.max(0, net - alreadyEntered);
     setPayments((p) => [...p, { mode: remaining[0], amount: leftover > 0 ? String(leftover) : "" }]);
   };
   const removePaymentRow  = (idx) => setPayments((p) => p.filter((_, i) => i !== idx));
