@@ -9,7 +9,7 @@
 import { fmt, fmtDate } from "../utils/format";
 
 // Fixed column layout — all rows use same widths
-const COL = "60px 1fr 76px 76px 80px";
+const COL = "48px 1fr 68px 68px 72px";
 
 const cell = (align = "left", extra = {}) => ({
   textAlign: align,
@@ -21,6 +21,17 @@ const cell = (align = "left", extra = {}) => ({
 
 export function CustomerLedger({ customer, transactions, settlements, getCustomerOutstanding, settings, onClose }) {
   const f  = (n) => fmt(n, settings.currency);
+  // Short date: "28 Mar" — no year to save space, year only if different from current
+  const shortDate = (d) => {
+    try {
+      const dt   = new Date(d);
+      const now  = new Date();
+      const day  = dt.getDate();
+      const mon  = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][dt.getMonth()];
+      const yr   = dt.getFullYear();
+      return yr !== now.getFullYear() ? `${day} ${mon} ${yr}` : `${day} ${mon}`;
+    } catch { return ""; }
+  };
   const f2 = (n) => n === 0 ? "" : fmt(Math.abs(n), settings.currency);
 
   // ── Build event list ──────────────────────────
@@ -104,9 +115,9 @@ export function CustomerLedger({ customer, transactions, settlements, getCustome
           <div style={{ display: "grid", gridTemplateColumns: COL, gap: 4, fontSize: 10, fontWeight: 700, color: "#9ca3af", padding: "6px 0", borderBottom: "2px solid #1e3a5f" }}>
             <span style={cell()}>DATE</span>
             <span style={cell()}>PARTICULARS</span>
-            <span style={cell("right")}>DEBIT (₹)</span>
-            <span style={cell("right")}>CREDIT (₹)</span>
-            <span style={cell("right")}>BALANCE (₹)</span>
+            <span style={cell("right")}>DEBIT</span>
+            <span style={cell("right")}>CREDIT</span>
+            <span style={cell("right")}>BAL.</span>
           </div>
         </div>
 
@@ -126,11 +137,18 @@ export function CustomerLedger({ customer, transactions, settlements, getCustome
                 alignItems: "center",
                 background: isInv ? "#fafbff" : isPay ? "#f6fef9" : "transparent",
               }}>
-                <span style={{ ...cell(), fontSize: 11, color: "#9ca3af" }}>{fmtDate(row.date)}</span>
+                <span style={{ ...cell(), fontSize: 11, color: "#9ca3af" }}>
+                  {(() => {
+                    try {
+                      const d = new Date(row.date);
+                      return d.getDate() + " " + ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][d.getMonth()];
+                    } catch { return ""; }
+                  })()}
+                </span>
 
                 {/* Particulars + mode badge */}
                 <div style={{ overflow: "hidden" }}>
-                  <div style={{ fontSize: 12, fontWeight: isInv ? 700 : 500, color: "#1e3a5f", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                  <div style={{ fontSize: 12, fontWeight: isInv ? 700 : 500, color: "#1e3a5f", wordBreak: "break-all" }}>
                     {row.label}
                   </div>
                   {row.mode && (
@@ -141,17 +159,17 @@ export function CustomerLedger({ customer, transactions, settlements, getCustome
                 </div>
 
                 {/* Debit */}
-                <span style={{ ...cell("right"), fontSize: 12, fontWeight: isInv ? 700 : 400, color: isInv ? "#dc2626" : "#d1d5db" }}>
+                <span style={{ ...cell("right"), fontSize: 11, fontWeight: isInv ? 700 : 400, color: isInv ? "#dc2626" : "#d1d5db" }}>
                   {f2(row.debit)}
                 </span>
 
                 {/* Credit */}
-                <span style={{ ...cell("right"), fontSize: 12, fontWeight: isPay ? 700 : 400, color: isPay ? "#16a34a" : "#d1d5db" }}>
+                <span style={{ ...cell("right"), fontSize: 11, fontWeight: isPay ? 700 : 400, color: isPay ? "#16a34a" : "#d1d5db" }}>
                   {f2(row.credit)}
                 </span>
 
                 {/* Running balance */}
-                <span style={{ ...cell("right"), fontSize: 12, fontWeight: 800, color: balColor(row.balance) }}>
+                <span style={{ ...cell("right"), fontSize: 11, fontWeight: 800, color: balColor(row.balance) }}>
                   {row.balance < 0 ? "-" : ""}{f(Math.abs(row.balance))}
                 </span>
               </div>
@@ -165,18 +183,15 @@ export function CustomerLedger({ customer, transactions, settlements, getCustome
             {/* Totals row */}
             <div style={{ display: "grid", gridTemplateColumns: COL, gap: 4, padding: "8px 0", borderBottom: "1px solid #e5e7eb", background: "#f8faff" }}>
               <span />
-              <span style={{ fontSize: 12, fontWeight: 800, color: "#1e3a5f" }}>TOTAL</span>
-              <span style={{ ...cell("right"), fontSize: 12, fontWeight: 800, color: "#dc2626" }}>{f(totalDebit)}</span>
-              <span style={{ ...cell("right"), fontSize: 12, fontWeight: 800, color: "#16a34a" }}>{f(totalCredit)}</span>
+              <span style={{ fontSize: 12, fontWeight: 800, color: "#1e3a5f", whiteSpace: "nowrap" }}>TOTAL</span>
+              <span style={{ ...cell("right"), fontSize: 11, fontWeight: 800, color: "#dc2626" }}>{f(totalDebit)}</span>
+              <span style={{ ...cell("right"), fontSize: 11, fontWeight: 800, color: "#16a34a" }}>{f(totalCredit)}</span>
               <span />
             </div>
             {/* Closing balance row */}
-            <div style={{ display: "grid", gridTemplateColumns: COL, gap: 4, padding: "8px 0" }}>
-              <span />
-              <span style={{ fontSize: 13, fontWeight: 800, color: "#1e3a5f" }}>CLOSING BALANCE</span>
-              <span />
-              <span />
-              <span style={{ ...cell("right"), fontSize: 14, fontWeight: 900, color: balColor(outstanding) }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0" }}>
+              <span style={{ fontSize: 12, fontWeight: 800, color: "#1e3a5f" }}>CLOSING BALANCE</span>
+              <span style={{ fontSize: 13, fontWeight: 900, color: balColor(outstanding) }}>
                 {outstanding < 0 ? "-" : ""}{f(Math.abs(outstanding))}
               </span>
             </div>
