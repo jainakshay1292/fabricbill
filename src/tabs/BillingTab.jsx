@@ -117,7 +117,15 @@ export function BillingTab({
             <div key={item.uid} style={{ background: isReturn ? "#fff1f2" : "#f9fafb", borderRadius: 10, padding: 12, marginBottom: 10, border: isReturn ? "1px solid #fca5a5" : "1px solid #e5e7eb" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, gap: 6 }}>
                 <input list="prod-list" value={item.name}
-                  onChange={(e) => updateLine(item.uid, "name", e.target.value)}
+                  onChange={(e) => {
+                    const val  = e.target.value;
+                    const prod = products.find((pr) => pr.name.toLowerCase() === val.toLowerCase());
+                    updateLine(item.uid, "name", val);
+                    // Auto-fill default qty when product is selected
+                    if (prod && prod.defaultQty != null) {
+                      updateLine(item.uid, "qty", prod.defaultQty);
+                    }
+                  }}
                   placeholder="Item name"
                   style={{ ...inp, flex: 1, padding: "8px 10px", fontSize: 13 }} />
                 <button onClick={() => removeLine(item.uid)}
@@ -138,13 +146,18 @@ export function BillingTab({
                 <div style={{ flex: "0 0 48%", minWidth: 0 }}>
                   <div style={{ ...lbl, fontSize: 11, marginBottom: 4 }}>Qty {isReturn ? "(Return)" : ""}</div>
                   <div style={{ display: "flex", alignItems: "center", gap: 3 }}>
-                    <button onClick={() => updateLine(item.uid, "qty", parseFloat((q - 1).toFixed(2)))}
-                      style={{ width: 36, height: 46, flexShrink: 0, border: "1px solid #d1d5db", background: "#fff", borderRadius: 6, fontSize: 20, cursor: "pointer", fontWeight: 700, color: "#1e3a5f" }}>−</button>
-                    <input type="number" value={item.qty} inputMode="decimal" step="any"
-                      onChange={(e) => updateLine(item.uid, "qty", e.target.value)}
-                      style={{ flex: 1, minWidth: 0, textAlign: "center", border: "1px solid #d1d5db", borderRadius: 6, padding: "12px 2px", fontSize: 15, fontWeight: 600 }} />
-                    <button onClick={() => updateLine(item.uid, "qty", parseFloat((q + 1).toFixed(2)))}
-                      style={{ width: 36, height: 46, flexShrink: 0, border: "1px solid #d1d5db", background: "#fff", borderRadius: 6, fontSize: 20, cursor: "pointer", fontWeight: 700, color: "#1e3a5f" }}>+</button>
+                    {(() => {
+                      const step = prod?.qtyStep || 1;
+                      return (<>
+                        <button onClick={() => updateLine(item.uid, "qty", parseFloat((q - step).toFixed(4)))}
+                          style={{ width: 36, height: 46, flexShrink: 0, border: "1px solid #d1d5db", background: "#fff", borderRadius: 6, fontSize: 20, cursor: "pointer", fontWeight: 700, color: "#1e3a5f" }}>−</button>
+                        <input type="number" value={item.qty} inputMode="decimal" step={step}
+                          onChange={(e) => updateLine(item.uid, "qty", e.target.value)}
+                          style={{ flex: 1, minWidth: 0, textAlign: "center", border: "1px solid #d1d5db", borderRadius: 6, padding: "12px 2px", fontSize: 15, fontWeight: 600 }} />
+                        <button onClick={() => updateLine(item.uid, "qty", parseFloat((q + step).toFixed(4)))}
+                          style={{ width: 36, height: 46, flexShrink: 0, border: "1px solid #d1d5db", background: "#fff", borderRadius: 6, fontSize: 20, cursor: "pointer", fontWeight: 700, color: "#1e3a5f" }}>+</button>
+                      </>);
+                    })()}
                   </div>
                 </div>
               </div>
