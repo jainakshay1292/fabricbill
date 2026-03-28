@@ -204,10 +204,28 @@ export default function App() {
 
   if (!ready)
     return (
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", flexDirection: "column", gap: 12, background: "linear-gradient(135deg,#1e3a5f 0%,#2563eb 100%)" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", flexDirection: "column", gap: 12, background: "linear-gradient(135deg,#1e3a5f 0%,#2563eb 100%)", padding: 24 }}>
         <div style={{ fontSize: 40 }}>🧵</div>
         <div style={{ fontWeight: 700, fontSize: 18, color: "#fff" }}>FabricBill</div>
-        <div style={{ color: "rgba(255,255,255,0.6)", fontSize: 13 }}>Loading {shopCode}…</div>
+        {syncStatus === "error" ? (
+          <>
+            <div style={{ color: "#fca5a5", fontSize: 13, textAlign: "center" }}>
+              Could not connect. Check your internet and try again.
+            </div>
+            <button
+              onClick={() => { window.location.reload(); }}
+              style={{ marginTop: 8, padding: "10px 28px", background: "#fff", color: "#1e3a5f", border: "none", borderRadius: 10, fontSize: 14, fontWeight: 800, cursor: "pointer" }}>
+              🔄 Retry
+            </button>
+            <button
+              onClick={handleChangeShop}
+              style={{ background: "none", border: "none", color: "rgba(255,255,255,0.5)", fontSize: 12, cursor: "pointer", marginTop: 4 }}>
+              ← Change Shop
+            </button>
+          </>
+        ) : (
+          <div style={{ color: "rgba(255,255,255,0.6)", fontSize: 13 }}>Loading {shopCode}…</div>
+        )}
       </div>
     );
 
@@ -274,6 +292,8 @@ export default function App() {
     const txn = await billing.handleConfirmPayment();
     if (txn) setShowReceipt(txn);
   }}
+  billDate={billing.billDate}
+  setBillDate={billing.setBillDate}
 />
         )}
 
