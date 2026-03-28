@@ -29,6 +29,7 @@ export function useBilling({ shopCode, role, settings, products, customers, setT
     { mode: settings.defaultPaymentMode, amount: "" },
   ]);
   const [saving, setSaving]                   = useState(false);
+  const [billDate, setBillDate]               = useState(() => new Date().toISOString().slice(0, 10)); // YYYY-MM-DD
 
   // ── Cart helpers ──────────────────────────────────────────
   const addLine    = () => setCart((p) => [...p, { uid: genId(), name: "", price: "", qty: 1 }]);
@@ -136,7 +137,7 @@ export function useBilling({ shopCode, role, settings, products, customers, setT
       const txn = {
         id: txnId,
         invoiceNo: null, // assigned by saveInvoice
-        date:          new Date().toISOString(),
+        date:          new Date(billDate + 'T' + new Date().toTimeString().slice(0,8)).toISOString(),
         customer:      cust,
         customerName:  cust.name,
         customerPhone: cust.phone || "",
@@ -175,6 +176,7 @@ export function useBilling({ shopCode, role, settings, products, customers, setT
     setAmountCollected("");
     setPayments([{ mode: defaultMode, amount: "" }]);
     setSelectedCustomer("c1");
+    setBillDate(new Date().toISOString().slice(0, 10));
   };
 
   return {
@@ -189,6 +191,10 @@ export function useBilling({ shopCode, role, settings, products, customers, setT
     // Customer selection
     selectedCustomer,
     setSelectedCustomer,
+
+    // Bill date (defaults to today, can be changed for backdated invoices)
+    billDate,
+    setBillDate,
 
     // Discount / amount collected
     discount,
