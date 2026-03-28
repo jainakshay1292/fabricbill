@@ -85,13 +85,18 @@ export function useBilling({ shopCode, role, settings, products, customers, setT
     ? Math.max(0, collected)
     : grandSubtotal - manualDiscount;
 
-  const collectedTaxable  = Math.floor(grossAfterDiscount / (1 + blendedRate) * 100) / 100;
-  const collectedGST      = Math.round((grossAfterDiscount - collectedTaxable) * 100) / 100;
+  // Round taxable to 2 decimal places using standard rounding
+  // GST is split equally — round total GST to even paisa so CGST === SGST
+  const collectedTaxable  = Math.round(grossAfterDiscount / (1 + blendedRate) * 100) / 100;
+  const rawGST            = grossAfterDiscount - collectedTaxable;
+  // Round GST to nearest 0.02 so it splits equally into two identical halves
+  const collectedGST      = Math.round(rawGST * 50) / 50;
   const collectedDiscount = useCollected
     ? Math.round(Math.max(0, grandSubtotal - grossAfterDiscount) * 100) / 100
     : manualDiscount;
 
-  const netBeforeRound = useCollected ? collected : collectedTaxable + collectedGST;
+  // Net = taxable + GST, rounded to nearest rupee with explicit round-off line
+  const netBeforeRound = Math.round((collectedTaxable + collectedGST) * 100) / 100;
   const netAmount      = useCollected ? Math.round(collected) : Math.round(netBeforeRound);
   const roundOff       = Math.round((netAmount - netBeforeRound) * 100) / 100;
 
