@@ -126,7 +126,7 @@ export function BillingTab({
                   {products.map((pr) => <option key={pr.id || pr.name} value={pr.name} />)}
                 </datalist>
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "3fr 2fr", gap: 10 }}>
                 {/* Price — full width input, large and easy to tap */}
                 <div>
                   <div style={{ ...lbl, fontSize: 11, marginBottom: 4 }}>Price (₹)</div>
@@ -238,7 +238,7 @@ export function BillingTab({
               </div>
             ))}
             {canAddPaymentRow && (
-              <button onClick={() => addPaymentRow(netAmount, totalPayments)}
+              <button onClick={() => addPaymentRow(netAmount, payments)}
                 style={{ width: "100%", padding: "8px 0", background: "#f3f4f6", color: "#374151", border: "1px dashed #d1d5db", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer", marginBottom: 4 }}>
                 + Split Payment
               </button>
