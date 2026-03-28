@@ -126,23 +126,25 @@ export function BillingTab({
                   {products.map((pr) => <option key={pr.id || pr.name} value={pr.name} />)}
                 </datalist>
               </div>
-              <div style={{ display: "flex", gap: 8 }}>
-                <div style={{ flex: 1 }}>
-                  <div style={{ ...lbl, fontSize: 10 }}>Price (₹)</div>
-                  <input type="number" value={item.price}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                {/* Price — full width input, large and easy to tap */}
+                <div>
+                  <div style={{ ...lbl, fontSize: 11, marginBottom: 4 }}>Price (₹)</div>
+                  <input type="number" value={item.price} inputMode="decimal" step="any"
                     onChange={(e) => updateLine(item.uid, "price", e.target.value)}
-                    style={{ ...inp, padding: "8px 10px", fontSize: 13 }} />
+                    style={{ ...inp, padding: "12px 10px", fontSize: 16, fontWeight: 600, textAlign: "right" }} />
                 </div>
-                <div style={{ width: 120 }}>
-                  <div style={{ ...lbl, fontSize: 10 }}>Qty {isReturn ? "(Return)" : ""}</div>
+                {/* Qty — larger input with +/- buttons */}
+                <div>
+                  <div style={{ ...lbl, fontSize: 11, marginBottom: 4 }}>Qty {isReturn ? "(Return)" : ""}</div>
                   <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
                     <button onClick={() => updateLine(item.uid, "qty", parseFloat((q - 1).toFixed(2)))}
-                      style={{ width: 32, height: 38, border: "1px solid #d1d5db", background: "#fff", borderRadius: 6, fontSize: 18, cursor: "pointer", fontWeight: 700, color: "#1e3a5f" }}>−</button>
-                    <input type="number" value={item.qty}
+                      style={{ width: 38, height: 46, border: "1px solid #d1d5db", background: "#fff", borderRadius: 6, fontSize: 22, cursor: "pointer", fontWeight: 700, color: "#1e3a5f", flexShrink: 0 }}>−</button>
+                    <input type="number" value={item.qty} inputMode="decimal" step="any"
                       onChange={(e) => updateLine(item.uid, "qty", e.target.value)}
-                      style={{ width: 46, textAlign: "center", border: "1px solid #d1d5db", borderRadius: 6, padding: "8px 4px", fontSize: 13 }} />
+                      style={{ flex: 1, minWidth: 0, textAlign: "center", border: "1px solid #d1d5db", borderRadius: 6, padding: "12px 4px", fontSize: 16, fontWeight: 600 }} />
                     <button onClick={() => updateLine(item.uid, "qty", parseFloat((q + 1).toFixed(2)))}
-                      style={{ width: 32, height: 38, border: "1px solid #d1d5db", background: "#fff", borderRadius: 6, fontSize: 18, cursor: "pointer", fontWeight: 700, color: "#1e3a5f" }}>+</button>
+                      style={{ width: 38, height: 46, border: "1px solid #d1d5db", background: "#fff", borderRadius: 6, fontSize: 22, cursor: "pointer", fontWeight: 700, color: "#1e3a5f", flexShrink: 0 }}>+</button>
                   </div>
                 </div>
               </div>
@@ -184,13 +186,7 @@ export function BillingTab({
               style={{ ...inp, border: "1px solid #fcd34d", fontWeight: 700, fontSize: 15, background: "#fffde7" }} />
             <div style={{ fontSize: 10, color: "#92400e", marginTop: 5 }}>Leave blank to use full price or manual discount</div>
           </div>
-          {settings.enableDiscount && !amountCollected && (
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10, background: "#f9fafb", padding: "10px 12px", borderRadius: 8, border: "1px solid #e5e7eb" }}>
-              <span style={{ fontSize: 14, color: "#6b7280", fontWeight: 600 }}>Discount (₹)</span>
-              <input type="number" min={0} value={discount} onChange={(e) => setDiscount(e.target.value)}
-                style={{ width: 90, textAlign: "right", border: "1px solid #d1d5db", borderRadius: 6, padding: "6px 8px", fontSize: 14, background: "#fff" }} />
-            </div>
-          )}
+
           <div style={{ background: "#f0fdf4", borderRadius: 10, padding: "12px 14px", marginBottom: 12 }}>
             {collectedDiscount > 0 && (
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 6, color: "#dc2626" }}>
@@ -215,23 +211,34 @@ export function BillingTab({
           <div style={{ marginTop: 4 }}>
             <div style={{ ...lbl, marginBottom: 8 }}>💳 Payment Mode(s)</div>
             {payments.map((pm, idx) => (
-              <div key={idx} style={{ display: "flex", gap: 6, marginBottom: 8, alignItems: "center" }}>
-                <select value={pm.mode} onChange={(e) => updatePaymentRow(idx, "mode", e.target.value)}
-                  style={{ flex: 1, padding: "9px 10px", border: "1px solid #d1d5db", borderRadius: 8, fontSize: 13, background: "#fff" }}>
-                  {availableModesFor(pm.mode).map((m) => <option key={m}>{m}</option>)}
-                </select>
-                <input type="number" value={pm.amount}
+              <div key={idx} style={{ marginBottom: 10 }}>
+                {/* Mode selector as pill buttons — always fits on one line */}
+                <div style={{ display: "flex", gap: 6, marginBottom: 6, flexWrap: "nowrap" }}>
+                  {availableModesFor(pm.mode).map((m) => (
+                    <button key={m} onClick={() => updatePaymentRow(idx, "mode", m)}
+                      style={{
+                        flex: 1, padding: "9px 4px", border: "none", borderRadius: 8,
+                        fontSize: 12, fontWeight: 700, cursor: "pointer",
+                        background: pm.mode === m ? "#1e3a5f" : "#f3f4f6",
+                        color:      pm.mode === m ? "#fff"    : "#374151",
+                      }}>
+                      {m}
+                    </button>
+                  ))}
+                  {payments.length > 1 && (
+                    <button onClick={() => removePaymentRow(idx)}
+                      style={{ padding: "9px 12px", background: "#fee2e2", border: "none", borderRadius: 8, color: "#dc2626", cursor: "pointer", fontWeight: 700, flexShrink: 0 }}>✕</button>
+                  )}
+                </div>
+                {/* Amount input — full width, large */}
+                <input type="number" value={pm.amount} inputMode="decimal"
                   onChange={(e) => updatePaymentRow(idx, "amount", e.target.value)}
                   placeholder={idx === 0 && payments.length === 1 ? String(netAmount) : "Amount"}
-                  style={{ width: 100, padding: "9px 10px", border: "1px solid #d1d5db", borderRadius: 8, fontSize: 13 }} />
-                {payments.length > 1 && (
-                  <button onClick={() => removePaymentRow(idx)}
-                    style={{ background: "#fee2e2", border: "none", borderRadius: 6, color: "#dc2626", padding: "8px 10px", cursor: "pointer", fontWeight: 700 }}>✕</button>
-                )}
+                  style={{ ...inp, padding: "12px 14px", fontSize: 16, fontWeight: 600, textAlign: "right" }} />
               </div>
             ))}
             {canAddPaymentRow && (
-              <button onClick={addPaymentRow}
+              <button onClick={() => addPaymentRow(netAmount, totalPayments)}
                 style={{ width: "100%", padding: "8px 0", background: "#f3f4f6", color: "#374151", border: "1px dashed #d1d5db", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer", marginBottom: 4 }}>
                 + Split Payment
               </button>
