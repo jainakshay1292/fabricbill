@@ -61,8 +61,8 @@ export function CustomersTab({
   const handleCreate = async () => {
     setCustError(""); setCustSuccess("");
     if (!newName.trim()) return setCustError("Name required.");
-    if (!newPhone.match(/^\d{10}$/)) return setCustError("Enter valid 10-digit number.");
-    if (customers.find((c) => c.phone === newPhone)) return setCustError("Phone already registered.");
+    if (newPhone && !newPhone.match(/^\d{10}$/)) return setCustError("Enter valid 10-digit number.");
+    if (newPhone && customers.find((c) => c.phone === newPhone)) return setCustError("Phone already registered.");
     const nc = { id: genId(), name: newName.trim(), phone: newPhone };
     await upsertCustomer(shopCode, nc);
     setCustomers((p) => [...p, nc]);
@@ -118,11 +118,11 @@ export function CustomersTab({
               />
             </div>
             <div style={{ marginBottom: 12 }}>
-              <label style={lbl}>Phone Number</label>
+              <label style={lbl}>Phone Number (optional)</label>
               <input
                 value={newPhone}
                 onChange={(e) => setNewPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
-                placeholder="10-digit mobile"
+                placeholder="10-digit mobile (optional)"
                 inputMode="numeric"
                 style={inp}
               />
