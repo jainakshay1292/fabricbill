@@ -277,9 +277,10 @@ export default function InvoiceView({ txn, settings, onClose }) {
   };
 
   const doThermalPrint = () => {
+    alert("Thermal button clicked — starting print...");
     let thermalText;
     try { thermalText = buildThermal(); }
-    catch(e) { alert("Receipt error: " + e.message); return; }
+    catch(e) { alert("Receipt build error: " + e.message); return; }
 
     // If running inside the FabricBill APK on TVS i9100,
     // use the native printer bridge directly — no dialog, instant print.
