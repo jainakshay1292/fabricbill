@@ -229,13 +229,13 @@ export default function InvoiceView({ txn, settings, onClose }) {
     // ── Totals ──
     const displayDiscount = Math.round((txn.subtotal - txn.taxable) * 100) / 100;
     if (displayDiscount > 0.01) t += row("Discount", "-" + displayDiscount.toFixed(2)) + "\n";
-    t += row("Taxable", (txn.taxable || 0).toFixed(2)) + "\n";
+    t += row("Taxable", txn.taxable.toFixed(2)) + "\n";
     gstRows.forEach((r) => {
       t += row("CGST@" + r.half + "%", r.cgst.toFixed(2)) + "\n";
       t += row("SGST@" + r.half + "%", r.sgst.toFixed(2)) + "\n";
     });
     if (txn.roundOff && txn.roundOff !== 0) {
-      t += row("Round Off", (txn.roundOff > 0 ? "+" : "") + (txn.roundOff || 0).toFixed(2)) + "\n";
+      t += row("Round Off", (txn.roundOff > 0 ? "+" : "") + txn.roundOff.toFixed(2)) + "\n";
     }
     t += dline + "\n";
     t += row("NET AMOUNT", fmt(total, "")) + "\n";
@@ -277,14 +277,24 @@ export default function InvoiceView({ txn, settings, onClose }) {
   };
 
   const doThermalPrint = () => {
-    let thermalText;
-    try { thermalText = buildThermal(); }
-    catch(e) { alert("Receipt error: " + e.message); return; }
+    const thermalText = buildThermal();
 
-    // TVS APK bridge
+    // If running inside the FabricBill APK on TVS i9100,
+    // use the native printer bridge directly — no dialog, instant print.
     if (window.printToTVS && window.isTVSPrinterAvailable && window.isTVSPrinterAvailable()) {
-      if (window.printToTVS(thermalText)) return;
+      const success = window.printToTVS(thermalText);
+      if (success) return;
     }
+
+    // Use hidden iframe instead of window.open — much faster on i9100
+    // No popup, no new tab, prints directly in current page context
+    const existing = document.getElementById("thermal-print-frame");
+    if (existing) existing.remove();
+
+    const iframe = document.createElement("iframe");
+    iframe.id    = "thermal-print-frame";
+    iframe.style.cssText = "position:fixed;top:-9999px;left:-9999px;width:58mm;height:1px;border:none;";
+    document.body.appendChild(iframe);
 
     const escaped = thermalText
       .replace(/&/g, "&amp;")
@@ -293,30 +303,29 @@ export default function InvoiceView({ txn, settings, onClose }) {
       .replace(/\n/g, "<br/>");
 
     const html = `<!DOCTYPE html><html><head>
-<title>Receipt</title>
-<style>
-@page { margin:0; size:58mm auto; }
-*    { box-sizing:border-box; }
-body { font-family:'Courier New',monospace; font-size:9px; line-height:1.35;
-       margin:0; padding:2mm; width:56mm; color:#000; background:#fff;
-       white-space:pre; }
-.btn { display:block; width:100%; margin-top:12px; padding:14px;
-       background:#1e3a5f; color:#fff; border:none; border-radius:8px;
-       font-size:16px; font-weight:bold; cursor:pointer; }
-@media print { .btn { display:none; } }
-</style>
-</head><body>
-${escaped}
-<button class="btn" onclick="window.print()">🖨️ TAP TO PRINT</button>
-</body></html>`;
+      <style>
+        @page { margin:0; size:58mm auto; }
+        body {
+          font-family:'Courier New',Courier,monospace;
+          font-size:9px; line-height:1.35;
+          margin:0; padding:1mm 2mm;
+          width:56mm; color:#000; background:#fff;
+          white-space:pre; word-break:normal;
+        }
+      </style>
+    </head><body>${escaped}</body></html>`;
 
-    const blob = new Blob([html], { type: "text/html" });
-    const url  = URL.createObjectURL(blob);
-    const win  = window.open(url, "_blank");
-    if (!win) {
-      alert("Popup blocked. Please allow popups for this site in Chrome settings.");
-    }
-    setTimeout(() => URL.revokeObjectURL(url), 10000);
+    iframe.contentDocument.open();
+    iframe.contentDocument.write(html);
+    iframe.contentDocument.close();
+
+    // Print as soon as iframe content is written — no delay
+    iframe.contentWindow.focus();
+    iframe.contentWindow.print();
+    // Clean up after print dialog closes
+    setTimeout(() => {
+      if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
+    }, 3000);
   };
 
   // ── Render ────────────────────────────────────────────────
