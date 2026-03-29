@@ -284,62 +284,46 @@ export default function InvoiceView({ txn, settings, onClose }) {
     if (window.printToTVS && window.isTVSPrinterAvailable && window.isTVSPrinterAvailable()) {
       const success = window.printToTVS(thermalText);
       if (success) return;
-      // If bridge failed, fall through to browser print
     }
 
-    // Browser fallback (Chrome on i9100 or any other browser)
-    const win = window.open("", "_blank");
-    if (!win) {
-      alert("Popup blocked. Please allow popups for this site.");
-      return;
-    }
-    win.document.write(`<html><head><title>Receipt ${txn.invoiceNo}</title>
+    // Hidden iframe print — works on i9100
+    const existing = document.getElementById("thermal-print-frame");
+    if (existing) existing.remove();
+
+    const iframe = document.createElement("iframe");
+    iframe.id    = "thermal-print-frame";
+    iframe.style.cssText = "position:fixed;top:-9999px;left:-9999px;width:58mm;height:1px;border:none;";
+    document.body.appendChild(iframe);
+
+    const escaped = thermalText
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/\n/g, "<br/>");
+
+    const html = `<!DOCTYPE html><html><head>
       <style>
-        @page {
-          margin: 0;
-          size: 58mm auto;
-        }
-        * { box-sizing: border-box; }
+        @page { margin:0; size:58mm auto; }
         body {
-          font-family: 'Courier New', Courier, monospace;
-          font-size: 9px;
-          line-height: 1.35;
-          margin: 0;
-          padding: 1mm 2mm;
-          width: 56mm;
-          color: #000;
-          background: #fff;
-          white-space: pre;
-          overflow-wrap: normal;
-          word-break: normal;
-        }
-        @media print {
-          .no-print { display: none !important; }
-          body { padding: 0 1mm; }
+          font-family:'Courier New',Courier,monospace;
+          font-size:9px; line-height:1.35;
+          margin:0; padding:1mm 2mm;
+          width:56mm; color:#000; background:#fff;
+          white-space:pre; word-break:normal;
         }
       </style>
-    </head>
-    <body>${thermalText.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/\n/g,"<br/>")}
-    <div class="no-print" style="margin-top:16px;text-align:center;">
-      <button onclick="window.print();"
-        style="padding:10px 24px;font-size:15px;font-weight:bold;cursor:pointer;background:#16a34a;color:#fff;border:none;border-radius:8px;">
-        Print
-      </button>
-      <button onclick="window.close();"
-        style="padding:10px 24px;font-size:15px;cursor:pointer;background:#e5e7eb;color:#111;border:none;border-radius:8px;margin-left:8px;">
-        Close
-      </button>
-    </div>
-    <script>
-      // Auto-print on i9100 and other POS devices
-      window.onload = function() {
-        window.print();
-        // Close window after print dialog is dismissed on POS devices
-        window.onfocus = function() { window.close(); };
-      };
-    </script>
-    </body></html>`);
-    win.document.close();
+    </head><body>${escaped}</body></html>`;
+
+    iframe.contentDocument.open();
+    iframe.contentDocument.write(html);
+    iframe.contentDocument.close();
+
+    iframe.contentWindow.focus();
+    iframe.contentWindow.print();
+
+    setTimeout(() => {
+      if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
+    }, 3000);
   };
 
   // ── Render ────────────────────────────────────────────────
