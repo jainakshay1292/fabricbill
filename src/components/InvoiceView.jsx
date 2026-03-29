@@ -276,75 +276,37 @@ export default function InvoiceView({ txn, settings, onClose }) {
     return t;
   };
 
-  const doThermalPrint = () => {
+  const doThermalPrint = async () => {
     const thermalText = buildThermal();
 
-    // If running inside the FabricBill APK on TVS i9100,
-    // use the native printer bridge directly — no dialog, instant print.
+    // If running inside the FabricBill APK, use native bridge
     if (window.printToTVS && window.isTVSPrinterAvailable && window.isTVSPrinterAvailable()) {
       const success = window.printToTVS(thermalText);
       if (success) return;
     }
 
-    // i9100 Chrome blocks window.print() from popup windows.
-    // Fix: inject receipt into the CURRENT page and call window.print()
-    // from the main window — this always works on Android POS devices.
-    const escaped = thermalText
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/\n/g, "<br/>");
-
-    // Remove any previous print elements
-    ["thermal-receipt-div","thermal-receipt-style"].forEach((id) => {
-      const el = document.getElementById(id);
-      if (el) el.remove();
-    });
-
-    // Inject CSS: when printing, show ONLY the receipt div
-    const style = document.createElement("style");
-    style.id = "thermal-receipt-style";
-    style.textContent = `
-      @page { margin:0; size:58mm auto; }
-      @media print {
-        html, body { margin:0 !important; padding:0 !important; }
-        body * { visibility:hidden !important; }
-        #thermal-receipt-div,
-        #thermal-receipt-div * { visibility:visible !important; }
-        #thermal-receipt-div {
-          position:fixed !important;
-          top:0 !important; left:0 !important;
-          width:56mm !important;
-          padding:1mm 2mm !important;
-          font-family:'Courier New',Courier,monospace !important;
-          font-size:9px !important;
-          line-height:1.35 !important;
-          color:#000 !important;
-          background:#fff !important;
-          white-space:pre !important;
-        }
-      }
-      #thermal-receipt-div { display:none; }
-    `;
-    document.head.appendChild(style);
-
-    // Inject receipt content
-    const div = document.createElement("div");
-    div.id = "thermal-receipt-div";
-    div.innerHTML = escaped;
-    document.body.appendChild(div);
-
-    // Call print on main window after short delay
-    setTimeout(() => {
-      window.print();
-      // Clean up after 3s
-      setTimeout(() => {
-        ["thermal-receipt-div","thermal-receipt-style"].forEach((id) => {
-          const el = document.getElementById(id);
-          if (el) el.remove();
+    // i9100 Chrome has no print support at all.
+    // Use Web Share API — opens Android share sheet so user can
+    // share to RawBT, WhatsApp, or any printer app installed.
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: "Receipt " + (txn.invoiceNo || ""),
+          text:  thermalText,
         });
-      }, 3000);
-    }, 150);
+        return;
+      } catch (e) {
+        if (e.name === "AbortError") return; // user cancelled
+      }
+    }
+
+    // Fallback: copy to clipboard
+    try {
+      await navigator.clipboard.writeText(thermalText);
+      alert("Receipt copied!\nPaste into RawBT or any printer app.");
+    } catch {
+      alert("Could not share or copy receipt. Please try the PDF option.");
+    }
   };
 
   // ── Render ────────────────────────────────────────────────
