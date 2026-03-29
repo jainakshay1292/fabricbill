@@ -286,52 +286,65 @@ export default function InvoiceView({ txn, settings, onClose }) {
       if (success) return;
     }
 
-    // Open print window — user selects RawBT or any other printer
+    // i9100 Chrome blocks window.print() from popup windows.
+    // Fix: inject receipt into the CURRENT page and call window.print()
+    // from the main window — this always works on Android POS devices.
     const escaped = thermalText
       .replace(/&/g, "&amp;")
       .replace(/</g, "&lt;")
       .replace(/>/g, "&gt;")
       .replace(/\n/g, "<br/>");
 
-    const win = window.open("", "_blank", "width=300,height=500");
-    if (!win) {
-      alert("Popup blocked. Please allow popups for this site.");
-      return;
-    }
+    // Remove any previous print elements
+    ["thermal-receipt-div","thermal-receipt-style"].forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) el.remove();
+    });
 
-    win.document.write(`<!DOCTYPE html><html><head>
-      <title>Receipt</title>
-      <style>
-        @page { margin:0; size:58mm auto; }
-        * { box-sizing:border-box; }
-        body {
-          font-family:'Courier New',Courier,monospace;
-          font-size:9px; line-height:1.35;
-          margin:0; padding:1mm 2mm;
-          width:56mm; color:#000; background:#fff;
-          white-space:pre; word-break:normal;
+    // Inject CSS: when printing, show ONLY the receipt div
+    const style = document.createElement("style");
+    style.id = "thermal-receipt-style";
+    style.textContent = `
+      @page { margin:0; size:58mm auto; }
+      @media print {
+        html, body { margin:0 !important; padding:0 !important; }
+        body * { visibility:hidden !important; }
+        #thermal-receipt-div,
+        #thermal-receipt-div * { visibility:visible !important; }
+        #thermal-receipt-div {
+          position:fixed !important;
+          top:0 !important; left:0 !important;
+          width:56mm !important;
+          padding:1mm 2mm !important;
+          font-family:'Courier New',Courier,monospace !important;
+          font-size:9px !important;
+          line-height:1.35 !important;
+          color:#000 !important;
+          background:#fff !important;
+          white-space:pre !important;
         }
-        @media print { .no-print { display:none !important; } }
-        .no-print {
-          text-align:center; padding:10px;
-          font-family:sans-serif;
-          border-top: 1px solid #eee;
-          margin-top: 8px;
-        }
-        .btn-print {
-          padding:12px 32px; background:#16a34a; color:#fff;
-          border:none; border-radius:8px;
-          font-size:16px; font-weight:bold; cursor:pointer;
-          width:100%;
-        }
-      </style>
-    </head><body>
-      ${escaped}
-      <div class="no-print">
-        <button class="btn-print" onclick="window.print();">🖨️ Print</button>
-      </div>
-    </body></html>`);
-    win.document.close();
+      }
+      #thermal-receipt-div { display:none; }
+    `;
+    document.head.appendChild(style);
+
+    // Inject receipt content
+    const div = document.createElement("div");
+    div.id = "thermal-receipt-div";
+    div.innerHTML = escaped;
+    document.body.appendChild(div);
+
+    // Call print on main window after short delay
+    setTimeout(() => {
+      window.print();
+      // Clean up after 3s
+      setTimeout(() => {
+        ["thermal-receipt-div","thermal-receipt-style"].forEach((id) => {
+          const el = document.getElementById(id);
+          if (el) el.remove();
+        });
+      }, 3000);
+    }, 150);
   };
 
   // ── Render ────────────────────────────────────────────────
