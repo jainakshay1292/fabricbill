@@ -279,52 +279,365 @@ export default function InvoiceView({ txn, settings, onClose }) {
   const doThermalPrint = () => {
     let thermalText;
     try { thermalText = buildThermal(); }
-    catch(e) { alert("Receipt build error: " + e.message); return; }
+    catch(e) { alert("Receipt error: " + e.message); return; }
 
-    alert("Step 1: Receipt built OK. Length=" + thermalText.length);
-
-    // If running inside the FabricBill APK on TVS i9100,
-    // use the native printer bridge directly — no dialog, instant print.
+    // TVS APK bridge
     if (window.printToTVS && window.isTVSPrinterAvailable && window.isTVSPrinterAvailable()) {
-      const success = window.printToTVS(thermalText);
-      if (success) return;
+      if (window.printToTVS(thermalText)) return;
     }
 
-    try {
-      const existing = document.getElementById("thermal-print-frame");
-      if (existing) existing.remove();
-      alert("Step 2: Creating iframe...");
+    const escaped = thermalText
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/\n/g, "<br/>");
 
-      const iframe = document.createElement("iframe");
-      iframe.id    = "thermal-print-frame";
-      iframe.style.cssText = "position:fixed;top:-9999px;left:-9999px;width:58mm;height:1px;border:none;";
-      document.body.appendChild(iframe);
-      alert("Step 3: iframe added to DOM. contentDocument=" + (iframe.contentDocument ? "OK" : "NULL"));
+    const html = `<!DOCTYPE html><html><head>
+<title>Receipt</title>
+<style>
+@page { margin:0; size:58mm auto; }
+*    { box-sizing:border-box; }
+body { font-family:'Courier New',monospace; font-size:9px; line-height:1.35;
+       margin:0; padding:2mm; width:56mm; color:#000; background:#fff;
+       white-space:pre; }
+.btn { display:block; width:100%; margin-top:12px; padding:14px;
+       background:#1e3a5f; color:#fff; border:none; border-radius:8px;
+       font-size:16px; font-weight:bold; cursor:pointer; }
+@media print { .btn { display:none; } }
+</style>
+</head><body>
+${escaped}
+<button class="btn" onclick="window.print()">🖨️ TAP TO PRINT</button>
+</body></html>`;
 
-      const escaped = thermalText
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/\n/g, "<br/>");
-
-      const html = "<!DOCTYPE html><html><head><style>@page{margin:0;size:58mm auto;}body{font-family:monospace;font-size:9px;line-height:1.35;margin:0;padding:2mm;width:56mm;white-space:pre;}</style></head><body>" + escaped + "</body></html>";
-
-      iframe.contentDocument.open();
-      iframe.contentDocument.write(html);
-      iframe.contentDocument.close();
-      alert("Step 4: Content written. Calling print...");
-
-      iframe.contentWindow.print();
-      alert("Step 5: print() called!");
-    } catch(e) {
-      alert("Print error at step: " + e.message);
+    const blob = new Blob([html], { type: "text/html" });
+    const url  = URL.createObjectURL(blob);
+    const win  = window.open(url, "_blank");
+    if (!win) {
+      alert("Popup blocked. Please allow popups for this site in Chrome settings.");
     }
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+  };─────────────────────────────────────────────
+// src/components/InvoiceView.jsx
+// Full invoice modal with:
+//   - Print (browser)
+//   - WhatsApp (AiSensy API with PDF)
+//   - PDF download/share
+//   - Thermal print (actual print command)
+// ─────────────────────────────────────────────
 
-    setTimeout(() => {
-      const f = document.getElementById("thermal-print-frame");
-      if (f) f.remove();
-    }, 3000);
+import { useState, Fragment } from "react";
+import { fmt, fmtDate, numToWords } from "../utils/format";
+import { buildGstRows } from "../utils/gst";
+import { BDR, tds } from "../styles";
+import { uploadPDF, sendWhatsApp } from "../lib/api";
+
+export default function InvoiceView({ txn, settings, onClose }) {
+  const [showThermal, setShowThermal] = useState(false);
+  const [sending, setSending]         = useState(false);
+  const f = (n) => fmt(n, settings.currency);
+
+  // ── Derived values ────────────────────────────────────────
+  const amtWords  = numToWords(Math.round(txn.total || txn.net || 0)) + " Rupees Only";
+  const total     = txn.total || txn.net || 0;
+  const subtotal  = txn.subtotal ||
+    txn.items?.reduce((s, i) => s + (parseFloat(i.price) || 0) * Math.abs(parseFloat(i.qty) || 0), 0) || 0;
+  const gstRows   = buildGstRows(txn.items || [], txn.taxable || 0, subtotal);
+  const hasSplit  = txn.payments && txn.payments.length > 1;
+  const creditAmt = txn.payments
+    ? (txn.payments.find((p) => p.mode === "Credit") || {}).amount || 0
+    : txn.paymentMode === "Credit" ? total : 0;
+  const paymentLabel = hasSplit
+    ? txn.payments.filter((p) => p.amount > 0).map((p) => p.mode + ": " + f(p.amount)).join(" | ")
+    : txn.payments?.[0]?.mode || txn.paymentMode || "Cash";
+  const isVoid = txn.void || txn.cancelled;
+
+  // ── Load jsPDF + html2canvas dynamically ─────────────────
+  const loadPDFLibs = async () => {
+    if (!window.html2canvas)
+      await new Promise((res, rej) => {
+        const s = document.createElement("script");
+        s.src = "https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js";
+        s.onload = res; s.onerror = rej;
+        document.head.appendChild(s);
+      });
+    if (!window.jspdf)
+      await new Promise((res, rej) => {
+        const s = document.createElement("script");
+        s.src = "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js";
+        s.onload = res; s.onerror = rej;
+        document.head.appendChild(s);
+      });
   };
+
+  // ── Generate PDF blob ─────────────────────────────────────
+  const generatePDFBase64 = async () => {
+    await loadPDFLibs();
+    const el = document.getElementById("inv-print");
+    const canvas = await window.html2canvas(el, { scale: 2, useCORS: true, backgroundColor: "#fff" });
+    const { jsPDF } = window.jspdf;
+    const pdf  = new jsPDF({ orientation: "portrait", unit: "mm", format: "a5" });
+    const pdfW = pdf.internal.pageSize.getWidth();
+    pdf.addImage(canvas.toDataURL("image/jpeg", 0.95), "JPEG", 0, 0, pdfW, (canvas.height * pdfW) / canvas.width);
+    return pdf.output("datauristring").split(",")[1];
+  };
+
+  // ── Print (browser print dialog) ─────────────────────────
+  const doPrint = () => {
+    const el  = document.getElementById("inv-print");
+    const win = window.open("", "_blank");
+    if (!win || !el) return;
+    win.document.write(`<html><head><title>Invoice ${txn.invoiceNo}</title>
+      <style>body{font-family:monospace;margin:20px;}table{width:100%;border-collapse:collapse;}td,th{border:1px solid #000;padding:4px 6px;font-size:11px;}</style>
+      </head><body>${el.innerHTML}
+      <br/><button onclick="window.print();window.close();">Print / Save PDF</button>
+      </body></html>`);
+    win.document.close();
+  };
+
+  // ── WhatsApp via AiSensy (PDF) ────────────────────────────
+  const doWhatsApp = async () => {
+    const phone = txn.customer?.phone || txn.customerPhone || "";
+    if (!phone || phone.length !== 10) {
+      alert("No valid phone number for this customer.");
+      return;
+    }
+    setSending(true);
+    try {
+      const base64    = await generatePDFBase64();
+      const filename  = `Invoice-${txn.invoiceNo.replace("/", "-")}.pdf`;
+      const pdfUrl = await uploadPDF(base64, filename);
+      await sendWhatsApp(
+        phone,
+        "invoice_sent",
+        [
+          txn.customer?.name || txn.customerName || "Customer",
+          settings.shopName,
+          txn.invoiceNo,
+          fmtDate(txn.date),
+          fmt(total, settings.currency),
+          txn.payments?.[0]?.mode || txn.paymentMode || "Cash",
+          settings.footerNote || "Thank you for your business!",
+        ],
+        pdfUrl,
+        filename,
+      );
+      alert("✅ Invoice sent on WhatsApp with PDF!");
+    } catch (e) {
+      console.error("WhatsApp error:", e.message);
+      alert("❌ Could not send WhatsApp: " + e.message);
+    } finally {
+      setSending(false);
+    }
+  };
+
+  // ── PDF download/share ────────────────────────────────────
+  const doSharePDF = async () => {
+    setSending(true);
+    try {
+      const base64   = await generatePDFBase64();
+      const filename = `Invoice-${txn.invoiceNo.replace("/", "-")}.pdf`;
+      const byteChars   = atob(base64);
+      const byteNumbers = new Array(byteChars.length).fill(0).map((_, i) => byteChars.charCodeAt(i));
+      const byteArray   = new Uint8Array(byteNumbers);
+      const blob        = new Blob([byteArray], { type: "application/pdf" });
+      const file        = new File([blob], filename, { type: "application/pdf" });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ title: "Invoice " + txn.invoiceNo, files: [file] });
+      } else {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a"); a.href = url; a.download = filename; a.click();
+        URL.revokeObjectURL(url);
+      }
+    } catch {
+      alert("Could not generate PDF. Try on mobile Chrome.");
+    } finally {
+      setSending(false);
+    }
+  };
+
+  // ── Thermal text ──────────────────────────────────────────
+  const buildThermal = () => {
+    // W = 32 chars for 58mm paper
+    // Adjust down to 24 if text still wraps on your printer
+    const W    = 32;
+    const line = "-".repeat(W);
+    const dline = "=".repeat(W);
+
+    // Wrap a long string at word boundaries
+    const wrap = (s, w) => {
+      if (!s) return "";
+      const words = s.split(" ");
+      const lines = [];
+      let cur = "";
+      words.forEach((word) => {
+        if ((cur + " " + word).trim().length <= w) {
+          cur = (cur + " " + word).trim();
+        } else {
+          if (cur) lines.push(cur);
+          cur = word.slice(0, w);
+        }
+      });
+      if (cur) lines.push(cur);
+      return lines.join("\n");
+    };
+
+    // Centre within W
+    const ctr = (s) => {
+      if (!s) return "";
+      // wrap first then centre each line
+      return wrap(s, W).split("\n").map((l) =>
+        " ".repeat(Math.max(0, Math.floor((W - l.length) / 2))) + l
+      ).join("\n");
+    };
+
+    // Left label, right value — both fit on one line
+    const row = (l, r) => {
+      l = String(l); r = String(r);
+      const maxL = W - r.length - 1;
+      if (l.length > maxL) l = l.slice(0, maxL);
+      return l + " ".repeat(Math.max(1, W - l.length - r.length)) + r;
+    };
+
+    // Short date: "27-Mar-26" instead of "27 Mar 2026"
+    const shortDate = (d) => {
+      try {
+        const dt = new Date(d);
+        const day = String(dt.getDate()).padStart(2, "0");
+        const mon = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][dt.getMonth()];
+        const yr  = String(dt.getFullYear()).slice(2);
+        return day + "-" + mon + "-" + yr;
+      } catch { return ""; }
+    };
+
+    let t = "";
+
+    // ── Header ──
+    t += ctr(settings.shopName) + "\n";
+    if (settings.shopTagline) t += ctr(settings.shopTagline) + "\n";
+    if (settings.shopAddress)  t += wrap(settings.shopAddress, W) + "\n";
+    if (settings.shopPhone)    t += "Ph: " + settings.shopPhone + "\n";
+    if (settings.gstin)        t += "GSTIN: " + settings.gstin + "\n";
+    t += line + "\n";
+
+    // ── Void banner ──
+    if (isVoid) t += ctr("** VOID **") + "\n" + line + "\n";
+
+    // ── Invoice meta — keep each value short ──
+    t += row("Invoice:", txn.invoiceNo) + "\n";
+    t += row("Date:", shortDate(txn.date)) + "\n";
+    const buyerName = (txn.customer?.name || txn.customerName || "").slice(0, W - 7);
+    t += row("Buyer:", buyerName) + "\n";
+    const phone = txn.customer?.phone || txn.customerPhone;
+    if (phone) t += row("Ph:", phone) + "\n";
+    t += line + "\n";
+
+    // ── Items ──
+    txn.items.forEach((item, idx) => {
+      const name   = (item.name || "").slice(0, W - 3);
+      const qty    = parseFloat(item.qty)   || 0;
+      const price  = parseFloat(item.price) || 0;
+      const amount = (qty * price).toFixed(2);
+      // Line 1: number + name
+      t += (idx + 1) + ". " + name + "\n";
+      // Line 2: qty x rate (right-aligned amount)
+      t += row("   " + qty + " x " + price.toFixed(2), amount) + "\n";
+    });
+    t += line + "\n";
+
+    // ── Totals ──
+    const displayDiscount = Math.round((txn.subtotal - txn.taxable) * 100) / 100;
+    if (displayDiscount > 0.01) t += row("Discount", "-" + displayDiscount.toFixed(2)) + "\n";
+    t += row("Taxable", (txn.taxable || 0).toFixed(2)) + "\n";
+    gstRows.forEach((r) => {
+      t += row("CGST@" + r.half + "%", r.cgst.toFixed(2)) + "\n";
+      t += row("SGST@" + r.half + "%", r.sgst.toFixed(2)) + "\n";
+    });
+    if (txn.roundOff && txn.roundOff !== 0) {
+      t += row("Round Off", (txn.roundOff > 0 ? "+" : "") + (txn.roundOff || 0).toFixed(2)) + "\n";
+    }
+    t += dline + "\n";
+    t += row("NET AMOUNT", fmt(total, "")) + "\n";
+    t += dline + "\n";
+
+    // ── Payment ──
+    if (hasSplit) {
+      t += "Payment:\n";
+      txn.payments.filter((p) => p.amount > 0).forEach((p) => {
+        t += row("  " + p.mode, fmt(p.amount, "")) + "\n";
+      });
+    } else {
+      t += row("Payment:", paymentLabel) + "\n";
+    }
+    if (creditAmt > 0) t += row("AMT DUE:", fmt(creditAmt, "")) + "\n";
+    t += line + "\n";
+
+    // ── Amount in words — word-wrapped ──
+    const wrapLine = (str, w) => {
+      const out = [];
+      while (str.length > w) {
+        let cut = str.lastIndexOf(" ", w);
+        if (cut <= 0) cut = w;
+        out.push(str.slice(0, cut));
+        str = str.slice(cut + 1);
+      }
+      if (str) out.push(str);
+      return out.join("\n");
+    };
+    t += wrapLine("Amt: " + amtWords, W) + "\n";
+    t += line + "\n";
+
+    // ── Footer — word-wrapped ──
+    if (settings.footerNote) t += wrap(settings.footerNote, W) + "\n";
+    if (settings.signoff)    t += ctr(settings.signoff) + "\n";
+    t += "\n\n\n";
+
+    return t;
+  };
+
+  const doThermalPrint = () => {
+    let thermalText;
+    try { thermalText = buildThermal(); }
+    catch(e) { alert("Receipt error: " + e.message); return; }
+
+    // Remove previous print elements
+    ["_tp_div","_tp_style"].forEach(id => {
+      const el = document.getElementById(id); if (el) el.remove();
+    });
+
+    // Inject receipt CSS — when printing, show ONLY the receipt
+    const s = document.createElement("style");
+    s.id = "_tp_style";
+    s.textContent =
+      "@page{margin:0;size:58mm auto;}" +
+      "@media print{" +
+        "body>*{display:none!important;}" +
+        "#_tp_div{display:block!important;position:fixed;top:0;left:0;" +
+        "width:56mm;padding:1mm 2mm;font-family:monospace;font-size:9px;" +
+        "line-height:1.35;color:#000;background:#fff;white-space:pre;}" +
+      "}" +
+      "#_tp_div{display:none;}";
+    document.head.appendChild(s);
+
+    // Inject receipt content
+    const d = document.createElement("div");
+    d.id = "_tp_div";
+    d.innerHTML = thermalText
+      .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
+      .replace(/
+/g,"<br/>");
+    document.body.appendChild(d);
+
+    // Call print on MAIN window — works on i9100
+    setTimeout(() => {
+      window.print();
+      setTimeout(() => {
+        ["_tp_div","_tp_style"].forEach(id => {
+          const el = document.getElementById(id); if (el) el.remove();
+        });
+      }, 3000);
+    }, 100);
+  };;
 
   // ── Render ────────────────────────────────────────────────
   return (
