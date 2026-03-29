@@ -286,25 +286,24 @@ export default function InvoiceView({ txn, settings, onClose }) {
       if (success) return;
     }
 
-    // Use hidden iframe instead of window.open — much faster on i9100
-    // No popup, no new tab, prints directly in current page context
-    const existing = document.getElementById("thermal-print-frame");
-    if (existing) existing.remove();
-
-    const iframe = document.createElement("iframe");
-    iframe.id    = "thermal-print-frame";
-    iframe.style.cssText = "position:fixed;top:-9999px;left:-9999px;width:58mm;height:1px;border:none;";
-    document.body.appendChild(iframe);
-
+    // Android Chrome blocks iframe.print() — must use window.open()
     const escaped = thermalText
       .replace(/&/g, "&amp;")
       .replace(/</g, "&lt;")
       .replace(/>/g, "&gt;")
       .replace(/\n/g, "<br/>");
 
-    const html = `<!DOCTYPE html><html><head>
+    const win = window.open("", "_blank", "width=300,height=600");
+    if (!win) {
+      alert("Popup blocked. Please allow popups for this site to enable thermal printing.");
+      return;
+    }
+
+    win.document.write(`<!DOCTYPE html><html><head>
+      <title>Receipt</title>
       <style>
         @page { margin:0; size:58mm auto; }
+        * { box-sizing:border-box; }
         body {
           font-family:'Courier New',Courier,monospace;
           font-size:9px; line-height:1.35;
@@ -312,20 +311,35 @@ export default function InvoiceView({ txn, settings, onClose }) {
           width:56mm; color:#000; background:#fff;
           white-space:pre; word-break:normal;
         }
+        @media print { .no-print { display:none !important; } }
+        .no-print {
+          text-align:center; padding:12px;
+          font-family:sans-serif; font-size:14px;
+        }
+        .no-print button {
+          padding:10px 24px; margin:4px;
+          border:none; border-radius:8px;
+          font-size:15px; font-weight:bold; cursor:pointer;
+        }
       </style>
-    </head><body>${escaped}</body></html>`;
-
-    iframe.contentDocument.open();
-    iframe.contentDocument.write(html);
-    iframe.contentDocument.close();
-
-    // Print as soon as iframe content is written — no delay
-    iframe.contentWindow.focus();
-    iframe.contentWindow.print();
-    // Clean up after print dialog closes
-    setTimeout(() => {
-      if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
-    }, 3000);
+    </head><body>
+      ${escaped}
+      <div class="no-print">
+        <button onclick="window.print();" style="background:#16a34a;color:#fff;">🖨️ Print</button>
+        <button onclick="window.close();" style="background:#e5e7eb;color:#111;">Close</button>
+      </div>
+      <script>
+        // Auto-print on load for i9100 and POS devices
+        window.onload = function() {
+          setTimeout(function() {
+            window.print();
+            // Close window after print on POS devices
+            window.onfocus = function() { setTimeout(function(){ window.close(); }, 500); };
+          }, 300);
+        };
+      </script>
+    </body></html>`);
+    win.document.close();
   };
 
   // ── Render ────────────────────────────────────────────────
