@@ -277,10 +277,11 @@ export default function InvoiceView({ txn, settings, onClose }) {
   };
 
   const doThermalPrint = () => {
-    alert("Thermal button clicked — starting print...");
     let thermalText;
     try { thermalText = buildThermal(); }
     catch(e) { alert("Receipt build error: " + e.message); return; }
+
+    alert("Step 1: Receipt built OK. Length=" + thermalText.length);
 
     // If running inside the FabricBill APK on TVS i9100,
     // use the native printer bridge directly — no dialog, instant print.
@@ -289,43 +290,39 @@ export default function InvoiceView({ txn, settings, onClose }) {
       if (success) return;
     }
 
-    // Hidden iframe print — works on i9100
-    const existing = document.getElementById("thermal-print-frame");
-    if (existing) existing.remove();
+    try {
+      const existing = document.getElementById("thermal-print-frame");
+      if (existing) existing.remove();
+      alert("Step 2: Creating iframe...");
 
-    const iframe = document.createElement("iframe");
-    iframe.id    = "thermal-print-frame";
-    iframe.style.cssText = "position:fixed;top:-9999px;left:-9999px;width:58mm;height:1px;border:none;";
-    document.body.appendChild(iframe);
+      const iframe = document.createElement("iframe");
+      iframe.id    = "thermal-print-frame";
+      iframe.style.cssText = "position:fixed;top:-9999px;left:-9999px;width:58mm;height:1px;border:none;";
+      document.body.appendChild(iframe);
+      alert("Step 3: iframe added to DOM. contentDocument=" + (iframe.contentDocument ? "OK" : "NULL"));
 
-    const escaped = thermalText
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/\n/g, "<br/>");
+      const escaped = thermalText
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/\n/g, "<br/>");
 
-    const html = `<!DOCTYPE html><html><head>
-      <style>
-        @page { margin:0; size:58mm auto; }
-        body {
-          font-family:'Courier New',Courier,monospace;
-          font-size:9px; line-height:1.35;
-          margin:0; padding:1mm 2mm;
-          width:56mm; color:#000; background:#fff;
-          white-space:pre; word-break:normal;
-        }
-      </style>
-    </head><body>${escaped}</body></html>`;
+      const html = "<!DOCTYPE html><html><head><style>@page{margin:0;size:58mm auto;}body{font-family:monospace;font-size:9px;line-height:1.35;margin:0;padding:2mm;width:56mm;white-space:pre;}</style></head><body>" + escaped + "</body></html>";
 
-    iframe.contentDocument.open();
-    iframe.contentDocument.write(html);
-    iframe.contentDocument.close();
+      iframe.contentDocument.open();
+      iframe.contentDocument.write(html);
+      iframe.contentDocument.close();
+      alert("Step 4: Content written. Calling print...");
 
-    iframe.contentWindow.focus();
-    iframe.contentWindow.print();
+      iframe.contentWindow.print();
+      alert("Step 5: print() called!");
+    } catch(e) {
+      alert("Print error at step: " + e.message);
+    }
 
     setTimeout(() => {
-      if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
+      const f = document.getElementById("thermal-print-frame");
+      if (f) f.remove();
     }, 3000);
   };
 
