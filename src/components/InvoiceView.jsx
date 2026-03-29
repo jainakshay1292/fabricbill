@@ -286,16 +286,16 @@ export default function InvoiceView({ txn, settings, onClose }) {
       if (success) return;
     }
 
-    // Android Chrome blocks iframe.print() — must use window.open()
+    // Open print window — user selects RawBT or any other printer
     const escaped = thermalText
       .replace(/&/g, "&amp;")
       .replace(/</g, "&lt;")
       .replace(/>/g, "&gt;")
       .replace(/\n/g, "<br/>");
 
-    const win = window.open("", "_blank", "width=300,height=600");
+    const win = window.open("", "_blank", "width=300,height=500");
     if (!win) {
-      alert("Popup blocked. Please allow popups for this site to enable thermal printing.");
+      alert("Popup blocked. Please allow popups for this site.");
       return;
     }
 
@@ -313,31 +313,23 @@ export default function InvoiceView({ txn, settings, onClose }) {
         }
         @media print { .no-print { display:none !important; } }
         .no-print {
-          text-align:center; padding:12px;
-          font-family:sans-serif; font-size:14px;
+          text-align:center; padding:10px;
+          font-family:sans-serif;
+          border-top: 1px solid #eee;
+          margin-top: 8px;
         }
-        .no-print button {
-          padding:10px 24px; margin:4px;
+        .btn-print {
+          padding:12px 32px; background:#16a34a; color:#fff;
           border:none; border-radius:8px;
-          font-size:15px; font-weight:bold; cursor:pointer;
+          font-size:16px; font-weight:bold; cursor:pointer;
+          width:100%;
         }
       </style>
     </head><body>
       ${escaped}
       <div class="no-print">
-        <button onclick="window.print();" style="background:#16a34a;color:#fff;">🖨️ Print</button>
-        <button onclick="window.close();" style="background:#e5e7eb;color:#111;">Close</button>
+        <button class="btn-print" onclick="window.print();">🖨️ Print</button>
       </div>
-      <script>
-        // Auto-print on load for i9100 and POS devices
-        window.onload = function() {
-          setTimeout(function() {
-            window.print();
-            // Close window after print on POS devices
-            window.onfocus = function() { setTimeout(function(){ window.close(); }, 500); };
-          }, 300);
-        };
-      </script>
     </body></html>`);
     win.document.close();
   };
