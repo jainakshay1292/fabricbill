@@ -229,13 +229,13 @@ export default function InvoiceView({ txn, settings, onClose }) {
     // ── Totals ──
     const displayDiscount = Math.round((txn.subtotal - txn.taxable) * 100) / 100;
     if (displayDiscount > 0.01) t += row("Discount", "-" + displayDiscount.toFixed(2)) + "\n";
-    t += row("Taxable", txn.taxable.toFixed(2)) + "\n";
+    t += row("Taxable", (txn.taxable || 0).toFixed(2)) + "\n";
     gstRows.forEach((r) => {
       t += row("CGST@" + r.half + "%", r.cgst.toFixed(2)) + "\n";
       t += row("SGST@" + r.half + "%", r.sgst.toFixed(2)) + "\n";
     });
     if (txn.roundOff && txn.roundOff !== 0) {
-      t += row("Round Off", (txn.roundOff > 0 ? "+" : "") + txn.roundOff.toFixed(2)) + "\n";
+      t += row("Round Off", (txn.roundOff > 0 ? "+" : "") + (txn.roundOff || 0).toFixed(2)) + "\n";
     }
     t += dline + "\n";
     t += row("NET AMOUNT", fmt(total, "")) + "\n";
@@ -277,7 +277,9 @@ export default function InvoiceView({ txn, settings, onClose }) {
   };
 
   const doThermalPrint = () => {
-    const thermalText = buildThermal();
+    let thermalText;
+    try { thermalText = buildThermal(); }
+    catch(e) { alert("Receipt error: " + e.message); return; }
 
     // If running inside the FabricBill APK on TVS i9100,
     // use the native printer bridge directly — no dialog, instant print.
