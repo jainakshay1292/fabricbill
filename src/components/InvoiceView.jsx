@@ -235,7 +235,7 @@ export default function InvoiceView({ txn, settings, onClose }) {
       t += row("SGST@" + r.half + "%", r.sgst.toFixed(2)) + "\n";
     });
     if (txn.roundOff && txn.roundOff !== 0) {
-      t += row("Round Off", (txn.roundOff > 0 ? "+" : "") + txn.roundOff.toFixed(2)) + "\n";
+      t += row("Round Off", (txn.roundOff > 0 ? "+" : "-") + Math.abs(txn.roundOff).toFixed(2)) + "\n";
     }
     t += dline + "\n";
     t += row("NET AMOUNT", fmt(total, "")) + "\n";
@@ -434,7 +434,7 @@ export default function InvoiceView({ txn, settings, onClose }) {
                 <div style={{ display: "flex", justifyContent: "space-between", borderBottom: BDR, padding: "3px 6px", fontSize: 10 }}><span>IGST @</span><span style={{ fontWeight: 600 }}>—</span></div>
                 {!!(txn.roundOff && txn.roundOff !== 0) && (
                   <div style={{ display: "flex", justifyContent: "space-between", borderBottom: BDR, padding: "3px 6px", fontSize: 10 }}>
-                    <span>Round Off</span><span>{(txn.roundOff > 0 ? "+" : "") + f(txn.roundOff)}</span>
+                    <span>Round Off</span><span>{(txn.roundOff > 0 ? "+" : "-") + f(Math.abs(txn.roundOff))}</span>
                   </div>
                 )}
                 <div style={{ display: "flex", justifyContent: "space-between", padding: "4px 6px", fontWeight: 900, fontSize: 12 }}><span>Net Value</span><span>{f(Math.round(total))}</span></div>
