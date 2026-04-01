@@ -302,8 +302,8 @@ export default function InvoiceView({ txn, settings, onClose }) {
         * { box-sizing: border-box; }
         body {
           font-family: 'Courier New', Courier, monospace;
-          font-size: 9px;
-          line-height: 1.35;
+          font-size: 11px;
+          line-height: 1.5;
           margin: 0;
           padding: 1mm 2mm;
           width: 56mm;
