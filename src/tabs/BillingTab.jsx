@@ -3,7 +3,7 @@
 // ─────────────────────────────────────────────
 import { fmt } from "../utils/format";
 import { card, inp, lbl } from "../styles";
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 
 export function BillingTab({
   cart, cartWithTax, validCart,
@@ -26,6 +26,19 @@ export function BillingTab({
   const f = (n) => fmt(n, settings.currency);
   const [custSearch, setCustSearch] = useState("");
   const [custOpen, setCustOpen]     = useState(false);
+  const [suggestions, setSuggestions] = useState({ uid: null, list: [] });
+  const sugRef = useRef(null);
+
+  // Close suggestions when clicking outside
+  useEffect(() => {
+    const handler = (e) => {
+      if (sugRef.current && !sugRef.current.contains(e.target)) {
+        setSuggestions({ uid: null, list: [] });
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
 
   // Sort alphabetically, walk-in pinned first
   const sortedCustomers = [...customers].sort((a, b) => {
@@ -102,11 +115,6 @@ export function BillingTab({
         )}
       </div>
 
-      {/* ── Product datalist — single instance outside loop; Firefox requires a unique id ── */}
-      <datalist id="prod-list">
-        {products.map((pr) => <option key={pr.id || pr.name} value={pr.name} />)}
-      </datalist>
-
       {/* ── Cart items ── */}
       <div style={card}>
         <div style={{ fontWeight: 700, fontSize: 15, color: "#1e3a5f", marginBottom: 12 }}>🧾 Items</div>
@@ -122,18 +130,59 @@ export function BillingTab({
           return (
             <div key={item.uid} style={{ background: isReturn ? "#fff1f2" : "#f9fafb", borderRadius: 10, padding: 12, marginBottom: 10, border: isReturn ? "1px solid #fca5a5" : "1px solid #e5e7eb" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, gap: 6 }}>
-                <input list="prod-list" value={item.name}
-                  onChange={(e) => {
-                    const val  = e.target.value;
-                    const prod = products.find((pr) => pr.name.toLowerCase() === val.toLowerCase());
-                    updateLine(item.uid, "name", val);
-                    // Auto-fill default qty when product is selected
-                    if (prod && prod.defaultQty != null) {
-                      updateLine(item.uid, "qty", prod.defaultQty);
-                    }
-                  }}
-                  placeholder="Item name"
-                  style={{ ...inp, flex: 1, padding: "8px 10px", fontSize: 13 }} />
+                <div style={{ flex: 1, position: "relative" }} ref={suggestions.uid === item.uid ? sugRef : null}>
+                  <input
+                    type="text"
+                    value={item.name}
+                    autoComplete="off"
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      updateLine(item.uid, "name", val);
+                      const filtered = val.trim()
+                        ? products.filter((pr) => pr.name.toLowerCase().includes(val.toLowerCase()))
+                        : products;
+                      setSuggestions({ uid: item.uid, list: filtered.slice(0, 10) });
+                      const exact = products.find((pr) => pr.name.toLowerCase() === val.toLowerCase());
+                      if (exact && exact.defaultQty != null) updateLine(item.uid, "qty", exact.defaultQty);
+                    }}
+                    onFocus={(e) => {
+                      const val = e.target.value;
+                      const filtered = val.trim()
+                        ? products.filter((pr) => pr.name.toLowerCase().includes(val.toLowerCase()))
+                        : products;
+                      setSuggestions({ uid: item.uid, list: filtered.slice(0, 10) });
+                    }}
+                    placeholder="Item name"
+                    style={{ ...inp, width: "100%", padding: "8px 10px", fontSize: 13, boxSizing: "border-box" }}
+                  />
+                  {suggestions.uid === item.uid && suggestions.list.length > 0 && (
+                    <div style={{
+                      position: "absolute", top: "100%", left: 0, right: 0, zIndex: 999,
+                      background: "#fff", border: "1px solid #d1d5db", borderRadius: 8,
+                      boxShadow: "0 4px 16px rgba(0,0,0,0.13)", maxHeight: 220, overflowY: "auto", marginTop: 2
+                    }}>
+                      {suggestions.list.map((pr) => (
+                        <div key={pr.id || pr.name}
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            updateLine(item.uid, "name", pr.name);
+                            if (pr.defaultQty != null) updateLine(item.uid, "qty", pr.defaultQty);
+                            if (pr.price != null && !item.price) updateLine(item.uid, "price", pr.price);
+                            setSuggestions({ uid: null, list: [] });
+                          }}
+                          style={{
+                            padding: "9px 12px", cursor: "pointer", fontSize: 13,
+                            borderBottom: "1px solid #f3f4f6", color: "#1e3a5f",
+                          }}
+                          onMouseEnter={(e) => e.currentTarget.style.background = "#eff6ff"}
+                          onMouseLeave={(e) => e.currentTarget.style.background = "#fff"}
+                        >
+                          {pr.name}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
                 <button onClick={() => removeLine(item.uid)}
                   style={{ background: "#fee2e2", border: "none", borderRadius: 6, color: "#dc2626", padding: "8px 10px", cursor: "pointer", fontWeight: 700 }}>✕</button>
               </div>
