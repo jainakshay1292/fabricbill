@@ -139,7 +139,7 @@ export function BillingTab({
                       const val = e.target.value;
                       updateLine(item.uid, "name", val);
                       const filtered = val.trim()
-                        ? products.filter((pr) => pr.name.toLowerCase().includes(val.toLowerCase()))
+                        ? products.filter((pr) => pr.name.toLowerCase().startsWith(val.toLowerCase()))
                         : products;
                       setSuggestions({ uid: item.uid, list: filtered.slice(0, 10) });
                       const exact = products.find((pr) => pr.name.toLowerCase() === val.toLowerCase());
@@ -148,7 +148,7 @@ export function BillingTab({
                     onFocus={(e) => {
                       const val = e.target.value;
                       const filtered = val.trim()
-                        ? products.filter((pr) => pr.name.toLowerCase().includes(val.toLowerCase()))
+                        ? products.filter((pr) => pr.name.toLowerCase().startsWith(val.toLowerCase()))
                         : products;
                       setSuggestions({ uid: item.uid, list: filtered.slice(0, 10) });
                     }}
