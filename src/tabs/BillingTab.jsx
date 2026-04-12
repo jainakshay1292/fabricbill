@@ -102,6 +102,11 @@ export function BillingTab({
         )}
       </div>
 
+      {/* ── Product datalist — single instance outside loop; Firefox requires a unique id ── */}
+      <datalist id="prod-list">
+        {products.map((pr) => <option key={pr.id || pr.name} value={pr.name} />)}
+      </datalist>
+
       {/* ── Cart items ── */}
       <div style={card}>
         <div style={{ fontWeight: 700, fontSize: 15, color: "#1e3a5f", marginBottom: 12 }}>🧾 Items</div>
@@ -131,9 +136,6 @@ export function BillingTab({
                   style={{ ...inp, flex: 1, padding: "8px 10px", fontSize: 13 }} />
                 <button onClick={() => removeLine(item.uid)}
                   style={{ background: "#fee2e2", border: "none", borderRadius: 6, color: "#dc2626", padding: "8px 10px", cursor: "pointer", fontWeight: 700 }}>✕</button>
-                <datalist id="prod-list">
-                  {products.map((pr) => <option key={pr.id || pr.name} value={pr.name} />)}
-                </datalist>
               </div>
               <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
                 {/* Price — takes most of the space */}
