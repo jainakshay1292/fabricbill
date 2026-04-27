@@ -91,6 +91,7 @@ export default function App() {
     customers, setCustomers,
     products, setProducts,
     settlements, setSettlements,
+    journalEntries, setJournalEntries,
     handleSaveSettings, handleChangeShop: _handleChangeShop,
   } = appData;
 
@@ -345,7 +346,10 @@ export default function App() {
           <CashBookTab
             transactions={transactions}
             settlements={settlements}
+            journalEntries={journalEntries}
+            setJournalEntries={setJournalEntries}
             settings={settings}
+            shopCode={shopCode}
             isAdmin={isAdmin}
           />
         )}
