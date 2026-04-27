@@ -146,6 +146,16 @@ export async function uploadPDF(base64, filename) {
   return data.url;
 }
 
+// ── Journal Entries (manual cash book entries) ────────────────
+export const getJournalEntries = (shopCode) =>
+  call({ action: "getAll", shopCode, table: "journal_entries" });
+
+export const insertJournalEntry = (shopCode, entry) =>
+  call({ action: "insert", shopCode, table: "journal_entries", data: entry });
+
+export const deleteJournalEntry = (shopCode, id) =>
+  call({ action: "delete", shopCode, table: "journal_entries", id });
+
 // ── WhatsApp ──────────────────────────────────────────────────
 export async function sendWhatsApp(phone, templateName, variables, mediaUrl = "", mediaFilename = "") {
   if (!phone || phone.length !== 10) {
