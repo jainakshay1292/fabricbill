@@ -18,8 +18,8 @@ export const getFinYear = () => {
 };
 
 /**
- * Returns true if the given ISO date string is within the last 24 hours.
+ * Returns true if the given ISO date string is within the last 7 days.
  * Used to decide if an invoice is still editable.
  */
-export const isWithin24Hours = (dateStr) =>
-  Date.now() - new Date(dateStr).getTime() < 24 * 60 * 60 * 1000;
+export const isWithin7Days = (dateStr) =>
+  Date.now() - new Date(dateStr).getTime() < 7 * 24 * 60 * 60 * 1000;
