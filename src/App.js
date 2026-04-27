@@ -21,6 +21,7 @@ import { CustomersTab } from "./tabs/CustomersTab";
 import { HistoryTab }   from "./tabs/HistoryTab";
 import { ProductsTab }  from "./tabs/ProductsTab";
 import { SettingsTab }    from "./tabs/SettingsTab";
+import { CashBookTab }    from "./tabs/CashBookTab";
 
 // Modals — InvoiceView is default export, rest are named exports
 import InvoiceView           from "./components/InvoiceView";
@@ -187,6 +188,7 @@ export default function App() {
   // Items inside the More drawer — admin sees everything, staff sees less
   const moreItems = isAdmin
     ? [
+        ["cashbook",   "📒", "Cash Book",  "Running cash book & payment summary"],
         ["products",   "📦", "Products",   "Manage your product catalogue"],
         ["attendance", "🗓️", "Attendance",  "Track staff attendance"],
         ["settings",   "⚙️", "Settings",   "Shop & billing settings"],
@@ -337,6 +339,15 @@ export default function App() {
 
         {tab === "attendance" && (
           <AttendanceTab shopCode={shopCode} isAdmin={isAdmin} />
+        )}
+
+        {tab === "cashbook" && isAdmin && (
+          <CashBookTab
+            transactions={transactions}
+            settlements={settlements}
+            settings={settings}
+            isAdmin={isAdmin}
+          />
         )}
 
         {tab === "settings" && isAdmin && (
