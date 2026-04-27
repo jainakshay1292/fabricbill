@@ -14,6 +14,7 @@ export function EditInvoiceModal({ txn, products, settings, customers = [], onSa
   const [items, setItems]       = useState(txn.items.map((i) => ({ ...i })));
   const [payments, setPayments] = useState(txn.payments || [{ mode: txn.paymentMode || "Cash", amount: txn.total || txn.net || 0 }]);
   const [discount, setDiscount] = useState(txn.discount || 0);
+  const [billDate, setBillDate] = useState(() => txn.date ? txn.date.slice(0, 10) : new Date().toISOString().slice(0, 10));
 
   // ── Customer change state ─────────────────────
   const [selectedCustomerId, setSelectedCustomerId] = useState(txn.customer?.id || "c1");
@@ -99,6 +100,7 @@ export function EditInvoiceModal({ txn, products, settings, customers = [], onSa
       customer:      cust,
       customerName:  cust?.name  || txn.customerName,
       customerPhone: cust?.phone || txn.customerPhone,
+      date: new Date(billDate + 'T' + (txn.date ? new Date(txn.date).toTimeString().slice(0,8) : new Date().toTimeString().slice(0,8))).toISOString(),
       editedAt: new Date().toISOString(),
     });
   };
@@ -109,7 +111,18 @@ export function EditInvoiceModal({ txn, products, settings, customers = [], onSa
       <div style={{ background: "#fff", borderRadius: "20px 20px 0 0", padding: 16, width: "100%", maxWidth: 480, margin: "0 auto", maxHeight: "92vh", overflowY: "auto" }}>
 
         <div style={{ fontWeight: 800, fontSize: 17, color: "#1e3a5f", marginBottom: 2 }}>✏️ Edit Invoice {txn.invoiceNo}</div>
-        <div style={{ fontSize: 11, color: "#f59e0b", marginBottom: 14, fontWeight: 600 }}>⏰ Editable within 24 hours of creation</div>
+        <div style={{ fontSize: 11, color: "#f59e0b", marginBottom: 14, fontWeight: 600 }}>⏰ Editable within 7 days of creation</div>
+
+        {/* ── Invoice Date ── */}
+        <div style={{ marginBottom: 14 }}>
+          <label style={lbl}>📅 Invoice Date</label>
+          <input
+            type="date"
+            value={billDate}
+            onChange={(e) => setBillDate(e.target.value)}
+            style={{ ...inp }}
+          />
+        </div>
 
         {/* ── Customer selector ── */}
         <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 10, padding: 12, marginBottom: 14 }}>
