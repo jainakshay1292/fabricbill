@@ -1,5 +1,3 @@
-
-
 // ─────────────────────────────────────────────
 // tabs/HistoryTab.jsx
 // Bills list + Sales Report + Credit Report.
@@ -21,7 +19,7 @@ import { useState } from "react";
 import { fmt, fmtDate, fmtDateTime } from "../utils/format";
 import { buildGstRows } from "../utils/gst";
 import { toCSV, downloadCSV } from "../utils/csv";
-import { isWithin24Hours } from "../utils/misc";
+import { isWithin7Days } from "../utils/misc";
 import { card, inp, lbl } from "../styles";
 
 export function HistoryTab({
@@ -168,7 +166,7 @@ export function HistoryTab({
           {filteredBills.length === 0
             ? <div style={{ color: "#9ca3af", textAlign: "center", padding: "24px 0" }}>No bills found</div>
             : filteredBills.map((txn) => {
-              const canEdit  = isAdmin && !(txn.void || txn.cancelled) && isWithin24Hours(txn.date);
+              const canEdit  = isAdmin && !(txn.void || txn.cancelled) && isWithin7Days(txn.date);
               const pmtLabel = txn.payments?.length > 1
                 ? txn.payments.filter((p) => p.amount > 0).map((p) => p.mode).join("+")
                 : (txn.payments?.[0]?.mode || txn.paymentMode);
@@ -418,4 +416,3 @@ export function HistoryTab({
     </>
   );
 }
-
