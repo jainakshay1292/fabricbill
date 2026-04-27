@@ -476,8 +476,8 @@ export default async function handler(req, res) {
       const rows   = await r.json();
       if (!rows || rows.length === 0) return res.status(404).json({ error: "Invoice not found" });
       const txn       = rows[0].data;
-      const within24h = (Date.now() - new Date(txn.date).getTime()) < 24 * 60 * 60 * 1000;
-      if (!within24h) return res.status(403).json({ error: "Invoice can only be edited within 24 hours of creation." });
+      const within7Days = (Date.now() - new Date(txn.date).getTime()) < 7 * 24 * 60 * 60 * 1000;
+      if (!within7Days) return res.status(403).json({ error: "Invoice can only be edited within 7 days of creation." });
       return res.status(200).json({ allowed: true });
     }
 
