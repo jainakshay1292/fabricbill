@@ -13,6 +13,7 @@ import {
   getSettings, saveSettings,
   getTransactions, getCustomers,
   getProducts, getSettlements,
+  getJournalEntries,
   hashPin,
 } from "../lib/api";
 import { defaultSettings } from "../constants";
@@ -29,6 +30,7 @@ export function useAppData(shopCode) {
   const [customers, setCustomers]       = useState([]);
   const [products, setProducts]         = useState([]);
   const [settlements, setSettlements]   = useState([]);
+  const [journalEntries, setJournalEntries] = useState([]);
 
   // ── Load everything when shopCode is set ──────────────────
   useEffect(() => {
@@ -52,20 +54,21 @@ export function useAppData(shopCode) {
         setDraftSettings(merged);
 
         // Load all data in parallel for speed
-        const [txns, custs, prods, setts] = await Promise.all([
+        const [txns, custs, prods, setts, journals] = await Promise.all([
           getTransactions(shopCode),
           getCustomers(shopCode),
           getProducts(shopCode),
           getSettlements(shopCode),
+          getJournalEntries(shopCode),
         ]);
 
         setTransactions(txns || []);
-        // Always keep at least one walk-in customer
         setCustomers(
           custs?.length ? custs : [{ id: "c1", name: "Walk-in Customer", phone: "" }]
         );
         setProducts(prods || []);
         setSettlements(setts || []);
+        setJournalEntries(journals || []);
         setIsNewShop(false);
         setSyncStatus("ok");
       } catch {
@@ -103,6 +106,7 @@ export function useAppData(shopCode) {
     setCustomers([]);
     setProducts([]);
     setSettlements([]);
+    setJournalEntries([]);
     setSettings(defaultSettings);
     setDraftSettings(defaultSettings);
   };
@@ -132,5 +136,7 @@ export function useAppData(shopCode) {
     setProducts,
     settlements,
     setSettlements,
+    journalEntries,
+    setJournalEntries,
   };
 }
